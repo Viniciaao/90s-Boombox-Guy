@@ -6,15 +6,32 @@ Coloque aqui as musicas do Boombox Guy:
     som50.mp3
 
 Voce pode usar de 1 ate 50 musicas. O script confere quais arquivos existem
-e avisa na tela quantas encontrou na primeira vez que voce chama o NPC
-(cheat BOOBOX). Arquivos que faltarem sao simplesmente ignorados - pode ter
-so a som1.mp3, ou som1/som4/som9, que funciona do mesmo jeito.
+e usa so os que estao na pasta (cheat BOOBOX). Arquivos que faltarem sao
+simplesmente ignorados - pode ter so a som1.mp3, ou som1/som4/som9, que
+funciona do mesmo jeito.
 
 A ordem e sempre aleatoria (nunca sequencial) e o script evita repetir a
 mesma faixa duas vezes seguidas.
 
 Formatos aceitos: MP3 (recomendado), OGG, WAV, AIFF - o que o BASS do CLEO
 conseguir abrir.
+
+Se nao achar nenhum arquivo, aparece na tela "nenhuma musica encontrada"
+(esse e um dos dois unicos avisos do mod; o outro e o de CLEO+ faltando).
+
+--- Ajuste da caixa na mao (opcional) ---
+
+Se a caixa ficar torta ou longe da mao, digite BBGUYTUNE no jogo com o NPC
+chamado. Fica um texto na tela mostrando os valores e:
+
+    A / D              move a caixa no eixo X
+    W / S              move a caixa no eixo Y
+    Q / E              move a caixa no eixo Z
+    SHIFT + A/D/W/S/Q/E   gira a caixa
+    F5                 grava o ajuste em CLEO/BoomboxGuy/ajuste-caixa.txt
+
+Digite BBGUYTUNE de novo para sair do modo de ajuste (em jogo normal ele
+nao fica ativo e nada aparece na tela).
 
 No jogo, a estrutura final fica:
 
@@ -25,3 +42,4 @@ No jogo, a estrutura final fica:
           som1.mp3
           ...
           som50.mp3
+          ajuste-caixa.txt (so aparece se voce apertar F5 no BBGUYTUNE)

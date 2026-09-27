@@ -4,9 +4,10 @@ Remake do clássico **90s Boombox** (de *Guidopdu*), reescrito de zero em
 **gta3script + CLEO+**.
 
 A diferença de conceito: em vez de o CJ carregar a caixa de som, um **NPC
-civil** (o "cara do som") é chamado por cheat, aparece perto de você,
-**corre até o player** com a caixa de som nas mãos e passa a te acompanhar
-com a música saindo da caixa em **áudio 3D**.
+civil** (o "cara do som") é chamado por cheat, **aparece longe de você**
+(de preferência atrás, fora da câmera), **vem correndo** até o player
+carregando a caixa de som nas mãos e passa a te acompanhar com a música
+saindo da caixa em **áudio 3D**.
 
 ---
 
@@ -16,17 +17,31 @@ com a música saindo da caixa em **áudio 3D**.
 | --- | --- |
 | `BOOBOX` | Chama o carregador de caixa de som |
 | `BOOBOXD` | Dispensa o NPC e desliga a música |
+| `BBGUYTUNE` | (opcional) liga/desliga o modo de ajuste da caixa na mão |
 
-Depois de digitar `BOOBOX`, o NPC aparece a poucos metros, corre até você e
-começa a tocar uma faixa sorteada entre as suas músicas. Quando a música
-acaba, ele sorteia outra automaticamente — **sempre aleatório**, nunca em
-ordem, e sem repetir a mesma faixa duas vezes seguidas.
+Depois de digitar `BOOBOX`, o NPC aparece **a uns 45 metros de você**,
+geralmente atrás (do lado oposto ao que a câmera está olhando), e vem
+correndo até você. Quando chega perto, começa a tocar uma faixa sorteada
+entre as suas músicas. Quando a música acaba, ele sorteia outra
+automaticamente — **sempre aleatório**, nunca em ordem, e sem repetir a
+mesma faixa duas vezes seguidas.
 
+**Na tela só aparecem 2 avisos:** "nenhuma música encontrada" (quando você
+não tem nenhum `som*.mp3` na pasta) e "Cleo+ não encontrado / desatualizado".
+Todo o resto é silencioso — digitar o cheat, chegar, começar a tocar,
+dispensar, morrer: nada disso mostra texto.
+
+- **Veículo**: se você entrar em qualquer veículo **com cadeira de
+  passageiro livre** (carro, táxi, ônibus, barco, helicóptero, avião…), o
+  NPC entra junto e viaja com você. Ele espera o carro dar uma parada,
+  senta na carona e sai do carro quando você sai. Se o veículo estiver
+  lotado (ou não tiver carona, tipo moto), ele continua te seguindo a pé.
 - **Interiores**: se você entrar (ou sair) de qualquer interior, ele vai
   junto. O script percebe o "salto" de posição do player e leva o NPC na
   hora, com as mesmas checagens de chão e colisão.
-- **Fuga de carro/moto/helicóptero/avião**: se você se afastar muito e
-  **pisar de volta no chão**, ele é teleportado para junto de você.
+- **Fuga (carro/avião) sem lugar para ele**: se você se afastar muito e
+  **pisar de volta no chão**, ele é teleportado para junto de você (também
+  atrás, para não "aparecer do nada" na sua cara).
 - **NPC preso**: se ele ficar parado num canto (parede, cerca, beco) por
   6 segundos longe de você, ele também volta a aparecer perto.
 - **Sem blip no mapa**, sem marcador, sem ícone.
@@ -65,15 +80,14 @@ GTA San Andreas/
 
 **Quantidade de músicas: de 1 até 50.** O script **varre a pasta e conta
 quais arquivos existem** (`som1.mp3` … `som50.mp3`) na primeira vez que você
-chama o NPC, mostra na tela quantas encontrou e usa só as que estão lá —
-funciona com 1, 2, 10 ou 50 músicas, e até com numeração "esburacada"
-(por exemplo só `som1`, `som4` e `som9`). Arquivos que faltarem são
-simplesmente ignorados.
+chama o NPC e usa só as que estão lá — funciona com 1, 2, 10 ou 50 músicas,
+e até com numeração "esburacada" (por exemplo só `som1`, `som4` e `som9`).
+Arquivos que faltarem são simplesmente ignorados.
 
 Formatos: MP3 (recomendado), OGG, WAV, AIFF — o que o BASS do CLEO
-conseguir abrir. Se nenhum arquivo for encontrado, o script avisa na tela e
-tenta de novo mais tarde (você pode até colocar os arquivos com o jogo
-aberto, sem sair do jogo).
+conseguir abrir. Se nenhum arquivo for encontrado, o script mostra o aviso
+"nenhuma musica encontrada" e tenta de novo mais tarde (você pode até
+colocar os arquivos com o jogo aberto, sem sair do jogo).
 
 Não é necessário nenhum arquivo DFF/TXD: a caixa de som é o **objeto nativo
 do jogo** `2226 (low_hi_fi_3)`.
@@ -91,34 +105,57 @@ com `./build.sh` (ou `make`).
 | `CFG_PED_MODEL` | `7` (male01) | Skin do NPC. Troque pelo ID que você quiser |
 | `CFG_BOX_MODEL` | `2226` | Objeto da caixa de som |
 | `CFG_BOX_BONE` | `24` (`BONE_R_HAND`) | Osso onde a caixa é presa |
-| `CFG_BOX_OFF_X/Y/Z` | `0.22 / 0.10 / 0.05` | Posição fina da caixa na mão |
-| `CFG_BOX_ROT_X/Y/Z` | `0 / 90 / 0` | Rotação fina da caixa |
+| `CFG_BOX_OFF_X/Y/Z` | `-0.12 / 0.0 / 0.0` | Posição fina da caixa na mão |
+| `CFG_BOX_ROT_X/Y/Z` | `0 / -90 / 0` | Rotação fina da caixa |
+| `CFG_BOX_SCALE` | `1.0` | Tamanho da caixa (`0.7` deixa a caixa menor) |
+| `CFG_TUNE_POS` / `CFG_TUNE_ROT` | `0.02` / `5.0` | Tamanho do passo no modo `BBGUYTUNE` |
 | `CFG_SND_OFF_X/Y/Z` | `0.25 / 0.10 / 0.75` | Onde o som 3D nasce em relação ao corpo |
 | `CFG_VOLUME` | `1.0` | Volume da música |
 | `CFG_MAX_TRACKS` | `50` | Número máximo de faixas que o script procura (`som1..som50`) |
 | `CFG_PATH_SIZE` | `64` | Tamanho do buffer do caminho do MP3 |
 | `CFG_CLEOPLUS_MIN` | `16908288` (`0x01020000` = v1.2.0.0) | Versão mínima do CLEO+ aceita |
-| `CFG_APPEAR_DIST` | `4.0` | Distância em que ele aparece/teleporta |
+| `CFG_SPAWN_BACK` / `CFG_SPAWN_SIDE` | `-45.0` | Distâncias de spawn (negativo em Y = atrás do player) |
+| `CFG_SPAWN_MID` / `CFG_SPAWN_NEAR` | `-30.0` / `-15.0` | Spawn mais perto, se os pontos acima não tiverem chão |
+| `CFG_APPEAR_BACK` / `CFG_APPEAR_SIDE` / `CFG_APPEAR_FRONT` | `-6.0 / -6.0 / 6.0` | Pontos de teleporte |
 | `CFG_FOLLOW_D2` | `9.0` | Distância² (3 m) em que ele começa a te seguir |
 | `CFG_SPRINT_D2` | `400.0` | Distância² (20 m) em que ele corre mais rápido |
 | `CFG_LOST_D2` | `3600.0` | Distância² (60 m) considerado "longe demais" |
-| `CFG_JUMP_D2` | `625.0` | Distância² (25 m) de "salto" do player = troca de interior |
 | `CFG_FALL_Z` | `25.0` | Se o NPC ficar 25 m abaixo de você, é resgatado |
 | `CFG_STOP_DIST` | `2.5` | Raio em que ele para de andar |
-| `CFG_TELEPORT_MS` | `3000` | Quanto tempo longe (e a pé) antes de teleportar |
+| `CFG_TELEPORT_MS` | `1500` | Quanto tempo longe (e a pé) antes de teleportar |
 | `CFG_STUCK_MS` | `6000` | Quanto tempo parado longe antes de teleportar |
 | `CFG_RETASK_MS` | `1000` | Intervalo entre comandos de seguir |
+| `CFG_CAR_RETASK_MS` | `2000` | Intervalo entre tentativas de entrar no seu veículo |
 | `CFG_LOAD_MS` | `10000` | Timeout ao carregar modelos/mundo |
 | `CFG_AUDIO_RETRY_MS` | `20000` | Espera entre tentativas se nenhum MP3 abrir |
 
-### Ajustando a caixa na mão
+### Ajustando a caixa na mão (cheat `BBGUYTUNE`)
 
-A caixa é presa no osso da mão direita com um deslocamento/rotação
-configurável. Os valores padrão foram escolhidos por cálculo, **não testados
-in-game** — se a caixa aparecer torta ou longe da mão, ajuste
-`CFG_BOX_OFF_*` (posição, em metros, no espaço do osso) e `CFG_BOX_ROT_*`
-(graus) e recompile. Dica: `CFG_BOX_ROT_Y 90.0` costuma ser necessário para
-a caixa ficar "de pé" na mão.
+A caixa é presa no **osso da mão direita**, e o deslocamento/rotação usam os
+eixos **do osso** — que não são os eixos do mundo (por isso os números
+parecem estranhos e a rotação em Y é `-90`). Em vez de ficar tentando
+adivinhar, existe um **modo de ajuste ao vivo**:
+
+1. Chame o NPC (`BOOBOX`) e digite `BBGUYTUNE`.
+2. Com o modo ligado, o jogo mostra os valores atuais na tela e:
+
+   | Teclas | O que fazem |
+   | --- | --- |
+   | `A` / `D` | move a caixa no eixo X |
+   | `W` / `S` | move a caixa no eixo Y |
+   | `Q` / `E` | move a caixa no eixo Z |
+   | `SHIFT` + `A/D/W/S/Q/E` | gira a caixa (X/Y/Z) |
+   | `F5` | grava o ajuste em `CLEO/BoomboxGuy/ajuste-caixa.txt` |
+
+   (O CJ anda um pouco ao apertar WASD — pare, ajuste e vá testando.)
+3. Quando ficar bom, aperte `F5` e cole os números nas constantes
+   `CFG_BOX_OFF_*` / `CFG_BOX_ROT_*` no topo de `BoomboxGuy.sc`
+   (o arquivo gravado já vem no formato `offset X Y Z rot X Y Z`).
+4. Digite `BBGUYTUNE` de novo para sair do modo de ajuste — em jogo normal
+   ele não fica ativo e nada aparece na tela.
+
+Se a caixa ficar grande demais para a mão, `CFG_BOX_SCALE 0.7` deixa ela
+menor (esse valor só muda recompilando, não dá para ajustar no jogo).
 
 ---
 
@@ -178,7 +215,7 @@ bagunçadas):
 - **Checagem de dependência**: na inicialização o script carrega
   `CLEO+.cleo` com `LOAD_DYNAMIC_LIBRARY`, pergunta a versão
   (`GetCleoPlusVersion`) e, se a DLL não existir ou for mais velha que
-  `1.2.0.0`, mostra um alerta explicativo e termina com
+  `1.2.0.0`, mostra o único alerta de erro e termina com
   `TERMINATE_THIS_CUSTOM_SCRIPT` — ou seja, ele nunca chama um opcode do
   CLEO+ que não existe, o que seria um crash certo.
 - **Checagem de colisão**: antes de criar ou teleportar o NPC o script
@@ -187,10 +224,18 @@ bagunçadas):
   `REQUEST_COLLISION` e confere o chão com `GET_GROUND_Z_FOR_3D_COORD`. A
   posição só é aceita se o chão estiver a ±3 m do chão do player — isso
   evita nascer em telhado, ponte, dentro de prédio ou **cair no vazio
-  embaixo do mapa**. Se nada servir, a última alternativa é o próprio lugar
-  do player (onde o chão com certeza existe).
+  embaixo do mapa**. Se nada servir, ele tenta pontos cada vez mais perto
+  (30 m, 15 m, 6 m) e, como última alternativa, o próprio lugar do player
+  (onde o chão com certeza existe).
   Além disso, se o NPC acabar 25 m abaixo de você (caiu no vazio), o script
   o resgata.
+- **Veículo**: a entrada como passageiro usa
+  `IS_CAR_PASSENGER_SEAT_FREE` antes de `TASK_ENTER_CAR_AS_PASSENGER`
+  (cadeiras 1..3). O pedido é refeito a cada 2 s enquanto o player estiver
+  dirigindo (o carro pode estar em movimento, e o jogo só embarca quando dá
+  — barco, helicóptero e avião também entram nessa checagem). Quando o
+  player sai do veículo, o script manda `TASK_LEAVE_ANY_CAR` e volta para o
+  modo a pé.
 - **Interiores**: entrar/sair de interior (ou qualquer teleporte do player)
   faz a posição do CJ "saltar" mais de 25 m num único quadro. O script
   detecta esse salto e leva o NPC junto, respeitando as checagens de
@@ -199,10 +244,11 @@ bagunçadas):
   música é pausada (`0AAD` ação 2) e retomada de onde parou (ação 3) no
   fim, e o script evita mexer no NPC no meio da cena.
 - **Nada de variáveis globais do jogo.** Só `LVAR_*` locais do script
-  (31 locais, dentro do limite de 32 do CLEO).
+  (32 locais, exatamente o limite de 32 do CLEO — por isso o script evita
+  variáveis "de enfeite").
 - **Modelos**: os dois modelos (NPC e caixa) são pedidos com `REQUEST_MODEL`
   e só depois de `HAS_MODEL_LOADED` o ped é criado; se estourar o timeout,
-  o script avisa e volta ao estado inicial. Os modelos são liberados com
+  o script volta ao estado inicial em silêncio. Os modelos são liberados com
   `MARK_MODEL_AS_NO_LONGER_NEEDED` sempre em par com o pedido.
 - **Áudio**: `LOAD_3D_AUDIO_STREAM` tem o retorno checado, e o stream é
   liberado com `REMOVE_AUDIO_STREAM` antes de carregar o próximo, ao
@@ -228,6 +274,19 @@ bagunçadas):
 - **Save**: como todo ped criado por script, o NPC pode acabar indo parar no
   seu savegame (sem a caixa, que é um objeto de render e não é salvo). Se
   isso incomodar, dispense ele com `BOOBOXD` antes de salvar.
+
+---
+
+## Histórico de versões
+
+- **v3** — spawn longe e fora da câmera (vem correndo até você); NPC entra
+  no seu veículo como passageiro quando tem lugar; só as 2 mensagens de
+  erro/aviso na tela (todo o resto silencioso); modo de ajuste da caixa na
+  mão com o cheat `BBGUYTUNE` (com gravação do ajuste em arquivo).
+- **v2** — cutscene pausa a música; teleporte só com colisão pronta;
+  detecção de 1..50 faixas em runtime; sorteio aleatório sem repetir;
+  checagem do CLEO+ na inicialização.
+- **v1** — primeira versão jogável (NPC segue, caixa na mão, áudio 3D).
 
 ---
 
