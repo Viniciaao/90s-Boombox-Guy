@@ -462,9 +462,14 @@ bbg_active:
     ENDIF
     // Player saiu do veiculo: o NPC tambem sai.
     IF IS_CHAR_IN_ANY_CAR pedBox
-        CLEAR_CHAR_TASKS pedBox
-        TASK_LEAVE_ANY_CAR pedBox
-        GET_GAME_TIMER taskTick
+        // excecao: se ele ainda esta entrando, deixa a animacao terminar -
+        // limpar a tarefa no meio dela o deixa de pe atravessando o carro.
+        // No quadro seguinte, ja sentado, ele recebe a ordem de sair normal.
+        IF NOT IS_CHAR_ENTERING_ANY_CAR pedBox
+            CLEAR_CHAR_TASKS pedBox
+            TASK_LEAVE_ANY_CAR pedBox
+            GET_GAME_TIMER taskTick
+        ENDIF
         RETURN
     ENDIF
 
@@ -704,27 +709,46 @@ bbg_try_off:
 bbg_enter_car:
     flag = 0
     GET_GAME_TIMER taskTick
+    // Ele ja esta indo/entrando no carro? Entao nao encosta nele: limpar as
+    // tarefas (ou mandar a tarefa de novo) no meio da animacao de entrar
+    // deixa ele DE PE dentro do carro, atravessando a lataria.
+    IF IS_CHAR_ENTERING_ANY_CAR pedBox
+        flag = 1
+        RETURN
+    ENDIF
     STORE_CAR_CHAR_IS_IN_NO_SAVE playerChar tries
     IF tries = 0
         RETURN
     ENDIF
-    // procura uma cadeira livre: 1 = carona da frente, 2 e 3 = atras
-    dt = 1
+    // Procura cadeira de carona livre, comecando pela 0: em carro de quatro
+    // lugares ela e a da frente (1 e 2 sao os de tras) e em carro de dois
+    // lugares - e na moto - a garupa tambem e a 0. Era por isso que ele nao
+    // subia na moto: a procura comecava na 1 e nunca achava lugar.
+    dt = -1                       // cadeira livre (-1 = nenhuma)
     tmpInt = 0
-    WHILE dt <= 3
-    AND tmpInt = 0
-        IF IS_CAR_PASSENGER_SEAT_FREE tries dt
-            tmpInt = dt
+    WHILE tmpInt <= 3
+    AND dt < 0
+        IF IS_CAR_PASSENGER_SEAT_FREE tries tmpInt
+            dt = tmpInt
         ELSE
-            dt = dt + 1
+            tmpInt = tmpInt + 1
         ENDIF
     ENDWHILE
-    IF tmpInt = 0
-        // lotado (ou banco sem carona, tipo moto esportiva): fica de fora
-        RETURN
+    IF dt < 0
+        // O teste por cadeira nao achou nada - em moto e quadriciclo ele
+        // costuma falhar. A ultima palavra e dos contadores do jogo: se
+        // ainda cabe passageiro, tenta a garupa (cadeira 0) de todo jeito.
+        GET_MAXIMUM_NUMBER_OF_PASSENGERS tries tmpInt
+        GET_NUMBER_OF_PASSENGERS tries loadTick
+        IF loadTick < tmpInt
+            dt = 0
+        ELSE
+            // lotado: ele vai a pe atras do player
+            RETURN
+        ENDIF
     ENDIF
     CLEAR_CHAR_TASKS pedBox
-    TASK_ENTER_CAR_AS_PASSENGER pedBox tries 20000 tmpInt
+    TASK_ENTER_CAR_AS_PASSENGER pedBox tries 20000 dt
     flag = 1
     RETURN
 

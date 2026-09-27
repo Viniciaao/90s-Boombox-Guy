@@ -34,10 +34,13 @@ Todo o resto é silencioso — digitar o cheat, chegar, começar a tocar,
 dispensar, morrer: nada disso mostra texto.
 
 - **Veículo**: se você entrar em qualquer veículo **com cadeira de
-  passageiro livre** (carro, táxi, ônibus, barco, helicóptero, avião…), o
-  NPC entra junto e viaja com você. Ele espera o carro dar uma parada,
-  senta na carona e sai do carro quando você sai. Se o veículo estiver
-  lotado (ou não tiver carona, tipo moto), ele continua te seguindo a pé.
+  passageiro livre** (carro, táxi, ônibus, barco, helicóptero, avião… e
+  **moto**, na garupa), o NPC entra junto e viaja com você. Ele espera o
+  carro dar uma parada, sobe e sai do veículo quando você sai. A procura da
+  cadeira começa pela **0** — que é a carona da frente em carro de quatro
+  lugares e a **garupa em carro de dois lugares e na moto** (começar pela 1
+  era o que impedia a moto). Se o veículo estiver lotado, ele continua te
+  seguindo a pé.
 - **Interiores**: se você entrar (ou sair) de qualquer interior, ele vai
   junto. O script percebe o "salto" de posição do player e leva o NPC na
   hora, com as mesmas checagens de chão e colisão.
@@ -390,6 +393,22 @@ bagunçadas):
 
 ## Histórico de versões
 
+- **v6.2** — dois acertos no embarque:
+  - **Moto (e carro de dois lugares)**: a procura da cadeira de carona
+    começava na `1` — que é lugar de trás de carro de quatro portas. Em
+    veículo de dois lugares a única carona é a `0` (garupa), então ele
+    simplesmente não achava lugar e ficava a pé. Agora a procura começa na
+    `0`, e se o teste por cadeira falhar (acontece em moto/quadriciclo) os
+    contadores do jogo (`0x1E9`/`0x1EA`) servem de desempate: se ainda cabe
+    passageiro, ele tenta a garupa.
+  - **Sentado de pé dentro do carro**: a cada 2 segundos o script repetia
+    `CLEAR_CHAR_TASKS` + "entrar no carro" enquanto ele ainda estava
+    **entrando**. Limpar a tarefa no meio da animação de entrar deixa o NPC
+    fisicamente dentro do veículo, mas de pé, atravessando a lataria (e a
+    repetição impedia a animação de terminar). Agora, enquanto
+    `IS_CHAR_ENTERING_ANY_CAR` (CLEO+ `0xE49`) for verdadeiro, o script não
+    encosta nas tarefas dele — nem para embarcar, nem quando você sai do
+    carro no meio do embarque.
 - **v6.1** — correção de crash: o handle do arquivo `.ini` estava numa
   variável que o parser das linhas usava como rascunho. Ao ler a primeira
   linha `model=`, o handle virava outro número (o tipo do modelo, `7`) e a
