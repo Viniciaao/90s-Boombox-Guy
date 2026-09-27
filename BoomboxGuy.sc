@@ -4,7 +4,9 @@
 // ---------------------------------------------------------------------------
 //  Um NPC civil ("o cara do som") e chamado por cheat, aparece LONGE (atras
 //  de voce, fora da camera), corre ate o player carregando uma caixa de som
-//  e passa a te acompanhar com musica 3D saindo da caixa.
+//  e passa a te acompanhar com musica 3D saindo da caixa. Ele tambem entra
+//  com voce nos interiores (aparece logo a frente do CJ) e sobe junto no
+//  seu veiculo.
 //
 //  Cheats:
 //     BOOBOX      chama o NPC
@@ -88,6 +90,10 @@ SCRIPT_START
     // quando a linha "model=" foi lida (o handle virava 7 e o fgets caia em
     // cima de um ponteiro invalido). Aqui ele fica fora do alcance do parser.
     CONST_INT   CFG_VAR_INI         1022
+    // "Area" (interior) em que o NPC esta: 0 = rua, 1..18 = interiores. Outra
+    // var do CLEO, pelo mesmo motivo das de cima. Serve para perceber a troca
+    // de ambiente e leva-lo junto na hora (veja bbg_interior).
+    CONST_INT   CFG_VAR_AREA        1021
     // Osso onde a caixa e presa: 24 = mao direita (BONE_R_HAND no Sanny).
     CONST_INT   CFG_BOX_BONE        24
 
@@ -139,6 +145,16 @@ SCRIPT_START
     CONST_FLOAT CFG_APPEAR_BACK    -6.0     //  6 m atras (1a escolha)
     CONST_FLOAT CFG_APPEAR_SIDE    -6.0     //  6 m ao lado (2a escolha)
     CONST_FLOAT CFG_APPEAR_FRONT    6.0     //  6 m na frente (3a escolha)
+    // ---- interior ----
+    // Onde ele aparece (e reaparece) dentro de um interior: logo a frente do
+    // CJ. La o teste de solo nao vale - o piso do ambiente nao responde ao
+    // GET_GROUND_Z_FOR_3D_COORD -, entao dentro de interior ele vai direto
+    // para este ponto, no mesmo Z do player.
+    CONST_FLOAT CFG_FRONT_DIST      1.5
+    // Dentro do ambiente o piso e um so (o mesmo do player): se ele ficar
+    // mais que isso ABAIXO, saiu da area com chao e esta caindo - era assim
+    // que ele morria de queda. Resgata na hora.
+    CONST_FLOAT CFG_INSIDE_FALL_Z   3.0
     // ---- outras distancias (os valores D2 sao o quadrado, em metros) ----
     CONST_FLOAT CFG_FOLLOW_D2       9.0     // (3 m) comeca a te seguir
     CONST_FLOAT CFG_SPRINT_D2       400.0   // (20 m) corre mais rapido
@@ -342,6 +358,14 @@ bbg_spawn:
     SET_CHAR_DECISION_MAKER pedBox DM_PED_EMPTY
     TASK_TOGGLE_PED_THREAT_SCANNER pedBox FALSE FALSE FALSE
 
+    // Nasce ja pertencendo a "area" do player (0 = rua, 1..18 = interior). O
+    // jogo so desenha - e so mantem a colisao - de quem esta na mesma area:
+    // sem isso, dentro de um interior ele aparece na rua, atravessa o piso
+    // (sem colisao) e cai no vazio.
+    GET_AREA_VISIBLE tmpInt
+    SET_CHAR_AREA_VISIBLE pedBox tmpInt
+    SET_CLEO_SHARED_VAR CFG_VAR_AREA tmpInt
+
     // (a pose da caixa ja veio do BoomboxGuy.ini, lido no cheat)
     GOSUB bbg_make_box
     GET_GAME_TIMER loadTick          // timer das tentativas de criar a caixa
@@ -354,8 +378,10 @@ bbg_spawn:
         GOSUB bbg_alloc_path
     ENDIF
 
-    // ja manda ele vir correndo atras de voce
-    TASK_FOLLOW_PATH_NODES_TO_COORD_WITH_RADIUS pedBox px py pz PEDMOVE_RUN -1 CFG_STOP_DIST
+    // ja manda ele vir correndo atras de voce (dentro de interior ele vai em
+    // linha reta: la nao existe malha de navegacao - veja bbg_go_player)
+    dz = 0.0
+    GOSUB bbg_go_player
     GET_GAME_TIMER taskTick
     farTick = -1
     stuckTick = -1
@@ -398,6 +424,13 @@ bbg_active:
         GOSUB bbg_dismiss
         RETURN
     ENDIF
+
+    // ---------------------------------------------------------------------
+    //  Interior: mantem o NPC na mesma "area" do player (o jogo so desenha e
+    //  so carrega a colisao da area atual) e, nas trocas, leva ele na hora
+    //  para a frente do CJ. Veja bbg_interior.
+    // ---------------------------------------------------------------------
+    GOSUB bbg_interior
 
     // ---------------------------------------------------------------------
     //  Modo de ajuste da caixa (cheat BBGUYTUNE) - liga/desliga
@@ -462,10 +495,11 @@ bbg_active:
     ENDIF
     // Player saiu do veiculo: o NPC tambem sai.
     IF IS_CHAR_IN_ANY_CAR pedBox
-        // excecao: se ele ainda esta entrando, deixa a animacao terminar -
-        // limpar a tarefa no meio dela o deixa de pe atravessando o carro.
-        // No quadro seguinte, ja sentado, ele recebe a ordem de sair normal.
+        // excecao: se ele ainda esta entrando (ou saindo), deixa a animacao
+        // terminar - limpar a tarefa no meio dela o deixa de pe atravessando
+        // o carro. No quadro seguinte, ja sentado, ele sai normalmente.
         IF NOT IS_CHAR_ENTERING_ANY_CAR pedBox
+        AND NOT IS_CHAR_EXITING_ANY_CAR pedBox
             CLEAR_CHAR_TASKS pedBox
             TASK_LEAVE_ANY_CAR pedBox
             GET_GAME_TIMER taskTick
@@ -491,11 +525,7 @@ bbg_active:
         dt = tmpInt - taskTick
         IF dt > CFG_RETASK_MS
             GET_GAME_TIMER taskTick
-            IF dz > CFG_SPRINT_D2
-                TASK_FOLLOW_PATH_NODES_TO_COORD_WITH_RADIUS pedBox px py pz PEDMOVE_SPRINT -1 CFG_STOP_DIST
-            ELSE
-                TASK_FOLLOW_PATH_NODES_TO_COORD_WITH_RADIUS pedBox px py pz PEDMOVE_RUN -1 CFG_STOP_DIST
-            ENDIF
+            GOSUB bbg_go_player
         ENDIF
     ENDIF
 
@@ -610,7 +640,10 @@ bbg_teleport:
     CLEAR_CHAR_TASKS pedBox
     SET_CHAR_COORDINATES_SIMPLE pedBox nx ny nz
     FIX_CHAR_GROUND_BRIGHTNESS_AND_FADE_IN pedBox TRUE TRUE FALSE
-    TASK_FOLLOW_PATH_NODES_TO_COORD_WITH_RADIUS pedBox px py pz PEDMOVE_RUN -1 CFG_STOP_DIST
+    SET_CHAR_VELOCITY pedBox 0.0 0.0 0.0      // nao herda queda/salto antigo
+    // caminho por nodes na rua, linha reta dentro de interior (bbg_go_player)
+    dz = 0.0
+    GOSUB bbg_go_player
 
     GET_GAME_TIMER taskTick
     farTick = -1
@@ -621,6 +654,14 @@ bbg_teleport:
     //  Onde ele aparece quando e chamado (longe, atras do player se der)
     // =======================================================================
 bbg_pick_spawn:
+    // Dentro de um interior o mundo la fora nao vale: o piso do ambiente nao
+    // responde ao teste de solo e ele acabaria nascendo na rua, longe de
+    // voce. La ele nasce logo a frente do CJ, no mesmo piso.
+    GOSUB bbg_in_interior
+    IF flag = 1
+        GOSUB bbg_pick_front
+        RETURN
+    ENDIF
     // Atras do player (a camera fica na frente dele, entao nascer atras
     // costuma ficar fora do campo de visao).
     dx = 0.0
@@ -660,6 +701,12 @@ bbg_pick_spawn:
     //  Onde ele reaparece quando e teleportado (perto, mas atras do player)
     // =======================================================================
 bbg_pick_tp:
+    // Mesma regra do nascimento: em interior, na frente do CJ e no piso dele.
+    GOSUB bbg_in_interior
+    IF flag = 1
+        GOSUB bbg_pick_front
+        RETURN
+    ENDIF
     dx = 0.0
     dy = CFG_APPEAR_BACK
     dz = 0.0
@@ -700,6 +747,133 @@ bbg_try_off:
             nz = dx + 0.5
             flag = 1
         ENDIF
+    ENDIF
+    RETURN
+
+    // =======================================================================
+    //  O player esta dentro de um interior?  saida: flag (1 = sim)
+    //  O 09E8 responde "este char esta fora do mundo normal" - seja qual for
+    //  o numero do interior -, entao ele e o teste seguro para decidir se o
+    //  ambiente e interior. O id da area (para vincular o NPC) vem do 077E.
+    // =======================================================================
+bbg_in_interior:
+    flag = 0
+    GET_CHAR_AREA_VISIBLE playerChar tmpInt
+    IF NOT tmpInt = 0
+        flag = 1
+    ENDIF
+    RETURN
+
+    // =======================================================================
+    //  Posicao logo a frente do CJ, no mesmo piso dele. E o ponto usado nos
+    //  interiores, onde o teste de solo nao acha o piso do ambiente.
+    //  Entrada: px py pz = posicao do player.  Saida: nx ny nz
+    // =======================================================================
+bbg_pick_front:
+    dx = 0.0
+    dy = CFG_FRONT_DIST
+    dz = 0.0
+    GET_OFFSET_FROM_CHAR_IN_WORLD_COORDS playerChar dx dy dz nx ny nz
+    nz = pz
+    RETURN
+
+    // =======================================================================
+    //  Manda o NPC ir ate a posicao do player (px py pz).
+    //  Entrada: px py pz e dz = distancia ao quadrado (0 = colado nele).
+    //  Na rua ele usa a malha de navegacao (desvia de muro, segue calcada);
+    //  dentro de um interior essa malha nao existe - ele simplesmente nao
+    //  anda -, entao la ele vai em linha reta, como qualquer NPC em sala.
+    // =======================================================================
+bbg_go_player:
+    GOSUB bbg_in_interior
+    IF flag = 1
+        IF dz > CFG_SPRINT_D2
+            TASK_GO_STRAIGHT_TO_COORD pedBox px py pz PEDMOVE_SPRINT 1000
+        ELSE
+            TASK_GO_STRAIGHT_TO_COORD pedBox px py pz PEDMOVE_RUN 1000
+        ENDIF
+        RETURN
+    ENDIF
+    IF dz > CFG_SPRINT_D2
+        TASK_FOLLOW_PATH_NODES_TO_COORD_WITH_RADIUS pedBox px py pz PEDMOVE_SPRINT -1 CFG_STOP_DIST
+    ELSE
+        TASK_FOLLOW_PATH_NODES_TO_COORD_WITH_RADIUS pedBox px py pz PEDMOVE_RUN -1 CFG_STOP_DIST
+    ENDIF
+    RETURN
+
+    // =======================================================================
+    //  Poe o NPC na frente do CJ agora - mesmo piso do player, sem passar
+    //  pelo teste de chao - e manda ele te seguir. E o que atende tanto a
+    //  troca de interior quanto o resgate de quem esta caindo.
+    // =======================================================================
+bbg_place_front:
+    GET_CHAR_COORDINATES playerChar px py pz
+    GOSUB bbg_pick_front
+    CLEAR_CHAR_TASKS pedBox
+    SET_CHAR_COORDINATES_SIMPLE pedBox nx ny nz
+    SET_CHAR_VELOCITY pedBox 0.0 0.0 0.0      // corta a queda que ele trazia
+    FIX_CHAR_GROUND_BRIGHTNESS_AND_FADE_IN pedBox TRUE TRUE FALSE
+    dz = 0.0
+    GOSUB bbg_go_player
+    GET_GAME_TIMER taskTick
+    farTick = -1
+    stuckTick = -1
+    flag = 1
+    RETURN
+
+    // =======================================================================
+    //  Interior (0 = rua, 1..18 = interiores): o jogo so desenha - e so
+    //  mantem a colisao carregada - das entidades que estao na mesma "area"
+    //  do player. Um NPC com a area errada aparece na rua em vez de dentro do
+    //  ambiente, atravessa o piso (nao ha colisao ali) e morre de queda
+    //  quando o ambiente descarrega / ele sai. Aqui ele segue a area do
+    //  player quadro a quadro e, quando a area muda (voce entrou, saiu ou
+    //  trocou de sala), vai na hora para a frente do CJ. Se ainda assim ele
+    //  ficar abaixo do piso do ambiente, e resgatado.
+    // =======================================================================
+bbg_interior:
+    // area do player: 09E8 = "esta fora do mundo normal?" (0 = nao). Se ele
+    // devolver o proprio id (algumas builds devolvem), melhor ainda; se
+    // devolver so "sim" (1), o id sai do 077E - a area que o jogo mostra.
+    GET_CHAR_AREA_VISIBLE playerChar tmpInt
+    IF tmpInt = 0
+        dt = 0
+    ELSE
+        IF tmpInt > 1
+            dt = tmpInt
+        ELSE
+            GET_AREA_VISIBLE dt
+        ENDIF
+    ENDIF
+    SET_CHAR_AREA_VISIBLE pedBox dt    // NPC passa a pertencer a mesma area
+    GET_CLEO_SHARED_VAR CFG_VAR_AREA tries
+    IF NOT tries = dt
+        // entrou, saiu ou trocou de sala: leva o NPC junto na hora
+        SET_CLEO_SHARED_VAR CFG_VAR_AREA dt
+        IF IS_CHAR_IN_ANY_CAR pedBox
+        OR IS_CHAR_ENTERING_ANY_CAR pedBox
+        OR IS_CHAR_EXITING_ANY_CAR pedBox
+            // no veiculo ele ja vai junto com o carro (e no meio da
+            // animacao de entrar/sair nao se mexe nas tarefas dele)
+            RETURN
+        ENDIF
+        GOSUB bbg_place_front
+        RETURN
+    ENDIF
+    IF dt = 0
+        RETURN
+    ENDIF
+    IF IS_CHAR_IN_ANY_CAR pedBox
+        RETURN
+    ENDIF
+    // Mesma area: confere se ele nao esta atravessando o piso. Dentro do
+    // ambiente o piso e plano (mesmo Z do player); bem abaixo disso, ele saiu
+    // da parte com chao e esta caindo - resgata antes de virar dano.
+    GET_CHAR_COORDINATES playerChar px py pz
+    GET_CHAR_COORDINATES pedBox nx ny nz
+    dz = pz - nz
+    IF dz > CFG_INSIDE_FALL_Z
+        GOSUB bbg_place_front
     ENDIF
     RETURN
 

@@ -42,8 +42,12 @@ dispensar, morrer: nada disso mostra texto.
   era o que impedia a moto). Se o veículo estiver lotado, ele continua te
   seguindo a pé.
 - **Interiores**: se você entrar (ou sair) de qualquer interior, ele vai
-  junto. O script percebe o "salto" de posição do player e leva o NPC na
-  hora, com as mesmas checagens de chão e colisão.
+  junto **na hora** e aparece **logo à frente do CJ**. Interiores no GTA
+  são "áreas" separadas, e o jogo só desenha — e só mantém a colisão
+  carregada — de quem está na mesma área do player. O script mantém o NPC
+  sempre na sua área e, quando ela muda (você entrou, saiu ou trocou de
+  sala), o resgate é imediato, no mesmo piso. Lá dentro ele anda em linha
+  reta: a malha de navegação de pedestres não cobre interiores.
 - **Fuga (carro/avião) sem lugar para ele**: se você se afastar muito e
   **pisar de volta no chão**, ele é teleportado para junto de você (também
   atrás, para não "aparecer do nada" na sua cara).
@@ -327,10 +331,20 @@ bagunçadas):
   — barco, helicóptero e avião também entram nessa checagem). Quando o
   player sai do veículo, o script manda `TASK_LEAVE_ANY_CAR` e volta para o
   modo a pé.
-- **Interiores**: entrar/sair de interior (ou qualquer teleporte do player)
-  faz a posição do CJ "saltar" mais de 25 m num único quadro. O script
-  detecta esse salto e leva o NPC junto, respeitando as checagens de
-  colisão acima.
+- **Interiores**: cada interior do GTA vive numa "área" própria (0 = rua,
+  1..18 = interiores) e o jogo só desenha — e só mantém a colisão carregada
+  — das entidades que estão na área do player. O script lê a área do player
+  (`09E8`), o id da área que o jogo está mostrando (`077E`) e mantém o NPC
+  na mesma (`0860` — é o mesmo truque que os spawners usam com `0840` para
+  carros, e resolve os três sintomas de uma vez: NPC aparecendo na rua em
+  vez de dentro do ambiente, preso e morrendo de queda). Quando a área muda,
+  o NPC vai para a frente do CJ na hora, sem passar pelo teste de solo (que
+  não encontra o piso de dentro do ambiente) — nas ruas continua valendo o
+  salto de 25 m com as checagens de colisão de sempre. Se ainda assim ele
+  ficar mais de 3 m abaixo do player dentro do ambiente (atravessando o
+  piso), é resgatado antes de virar dano de queda. E lá dentro ele anda em
+  linha reta (`TASK_GO_STRAIGHT_TO_COORD`): a malha de navegação não existe
+  em interiores, e com o `TASK_FOLLOW_PATH_NODES` ele ficava parado.
 - **Cutscenes**: durante `IS_ON_CUTSCENE` ou `IS_ON_SCRIPTED_CUTSCENE` a
   música é pausada (`0AAD` ação 2) e retomada de onde parou (ação 3) no
   fim, e o script evita mexer no NPC no meio da cena.
@@ -393,6 +407,34 @@ bagunçadas):
 
 ## Histórico de versões
 
+- **v6.3** — interiores:
+  - **Área errada (aparecia na rua / preso / morte por queda)**: o GTA
+    divide o mundo em "áreas" — `0` = rua, `1..18` = interiores — e só
+    desenha, além de só manter carregada a colisão, das entidades que estão
+    na mesma área do player. O NPC vivia na área `0`, então dentro de um
+    interior ele aparecia na rua (do lado de fora, para quem estava na
+    sala), atravessava o piso por falta de colisão e morria de queda quando
+    o ambiente descarregava. Agora o script lê a área do player (`09E8`) e a
+    área mostrada pelo jogo (`077E`) e mantém o NPC sempre na mesma
+    (`0860`) — o mesmo truque que os spawners de carro usam com `0840`.
+  - **Aparecer logo à frente do CJ**: quando a área muda (você entrou, saiu
+    ou trocou de sala), o NPC vai **na hora** para **1,5 m à frente do CJ**,
+    no mesmo piso, sem passar pelo teste de solo — que não acha o piso de
+    dentro de um interior. Vale também para o cheat chamado com você lá
+    dentro: ele nasce (e reaparece) na sua frente, e não mais na rua.
+  - **Andar dentro de casa**: lá dentro ele passa a usar
+    `TASK_GO_STRAIGHT_TO_COORD` (linha reta). A malha de navegação de
+    pedestres não cobre interiores, e o `TASK_FOLLOW_PATH_NODES` deixava ele
+    parado esperando um caminho que não existe.
+  - **Resgate sem queda**: antes de reposicionar, a velocidade dele é zerada
+    (`083C`) para não continuar caindo depois do resgate; e dentro de
+    interior, se ele ficar mais de 3 m abaixo do player (atravessando o
+    piso), é puxado de volta na hora, antes de virar dano de queda.
+  - **Nem entrar, nem sair do carro no meio da animação**: as ordens de
+    "entra no carro" e "sai do carro" agora esperam a animação de embarque
+    ou desembarque terminar (e o resgate de interior também), porque limpar
+    a tarefa no meio dela era o que deixava o NPC de pé atravessando a
+    lataria.
 - **v6.2** — dois acertos no embarque:
   - **Moto (e carro de dois lugares)**: a procura da cadeira de carona
     começava na `1` — que é lugar de trás de carro de quatro portas. Em
