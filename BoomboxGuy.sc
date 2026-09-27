@@ -104,6 +104,11 @@ SCRIPT_START
     // vars do CLEO, pelo mesmo motivo das de cima.
     CONST_INT   CFG_VAR_HP          1020
     CONST_INT   CFG_VAR_PUNCH       1019
+    // Modo de rota do NPC: 0 = pelos nodes da rua (o normal), 1 = linha reta.
+    // Vira 1 quando ele trava num ponto que a malha de navegacao nao cobre
+    // (porta, escada, canto de calcada) e volta a 0 quando ele chega perto de
+    // voce ou e reposicionado. Veja bbg_stuck_check.
+    CONST_INT   CFG_VAR_ROUTE       1018
     // Osso onde a caixa e presa: 24 = mao direita (BONE_R_HAND no Sanny).
     CONST_INT   CFG_BOX_BONE        24
 
@@ -185,7 +190,23 @@ SCRIPT_START
     CONST_FLOAT CFG_FALL_Z          25.0    // NPC abaixo disso = caiu no vazio
     CONST_FLOAT CFG_STOP_DIST       2.5     // raio em que ele para
     CONST_INT   CFG_TELEPORT_MS     1500    // longe por quanto tempo antes de teleportar
-    CONST_INT   CFG_STUCK_MS        6000    // parado por quanto tempo
+    // Travado por quanto tempo (ms) ate o resgate de emergencia (aparecer de
+    // novo perto de voce). "Travado" nao e so "parado": conta tambem quem esta
+    // com a tarefa de correr no motor mas nao sai do lugar (encravado num
+    // canto). Veja bbg_stuck_check.
+    CONST_INT   CFG_STUCK_MS        3500
+    // Velocidade abaixo da qual ele conta como parado. O 06AC do jogo devolve
+    // a velocidade de deslocamento ja multiplicada por 50 (NPC andando passa
+    // de 25 aqui; encravado fica em zero), entao 1.0 e o "nao saiu do lugar".
+    CONST_FLOAT CFG_STILL_SPEED     1.0
+    // Travado por quanto tempo (ms) ate trocar a rota pela LINHA RETA - o
+    // primeiro remedio, que nao pisca nada na tela. O teleporte fica para
+    // depois, se nem isso resolver (veja bbg_stuck_check).
+    CONST_INT   CFG_STRAIGHT_MS     700
+    // Ate esta distancia dele (o quadrado; 400.0 = 20 m) ele se vira para
+    // voce. De longe a prioridade e ANDAR: a virada troca a tarefa primaria
+    // do NPC e so interessa de perto.
+    CONST_FLOAT CFG_FACE_RANGE_D2   400.0
     CONST_INT   CFG_RETASK_MS       1000    // intervalo entre tarefas de seguir
     CONST_INT   CFG_CAR_RETASK_MS   2000    // intervalo entre tentativas de entrar no carro
     CONST_INT   CFG_LOAD_MS         10000   // timeout ao carregar modelos/mundo
@@ -404,6 +425,7 @@ bbg_spawn:
 
     // ja manda ele vir correndo atras de voce (dentro de interior ele vai em
     // linha reta: la nao existe malha de navegacao - veja bbg_go_player)
+    SET_CLEO_SHARED_VAR CFG_VAR_ROUTE 0
     dz = 0.0
     GOSUB bbg_go_player
     GET_GAME_TIMER taskTick
@@ -597,6 +619,8 @@ bbg_active:
             GOSUB bbg_go_player
         ENDIF
     ELSE
+        // Perto de novo: a rota volta ao normal (veja bbg_stuck_check).
+        SET_CLEO_SHARED_VAR CFG_VAR_ROUTE 0
         // Ja esta perto: se ele ainda vinha andando, para (bbg_stop_walk).
         // Sem isso ele termina a caminhada DENTRO do CJ - empurra o player,
         // que fica preso - e o jogo "fecha" o ultimo trecho da caminhada no
@@ -672,13 +696,44 @@ bbg_lost_check:
     //  algum canto: teleporta para perto do player.
     // =======================================================================
 bbg_stuck_check:
+    // Ele DEVERIA estar andando agora (quem chama ja conferiu a distancia).
+    // Duas manobras dele contam como travado:
+    //   1. o motor esta sem tarefa nenhuma (parado como qualquer civil);
+    //   2. o motor tem a tarefa de correr, mas ele esta preso em algum canto
+    //      e nao sai do lugar.
+    // O teste antigo era so o estado do motor (MOVE_STATE) e por isso so
+    // enxergava o caso 1: no caso 2 o estado ja era "correndo" e o resgate
+    // nunca vinha - era assim que ele ficava plantado no meio do caminho para
+    // sempre, sem nem o teleporte aparecer. A velocidade pega os dois.
     GET_CHAR_MOVE_STATE pedBox tmpInt
     IF tmpInt < MOVE_STATE_WALK_START
+        dt = 1                                  // nao esta nem tentando andar
+    ELSE
+        GET_CHAR_SPEED pedBox dx
+        IF dx < CFG_STILL_SPEED
+            dt = 1                              // correndo, mas no lugar
+        ELSE
+            dt = 0
+        ENDIF
+    ENDIF
+    IF dt = 1
         GET_GAME_TIMER tmpInt
         IF stuckTick < 0
             stuckTick = tmpInt
         ENDIF
         dt = tmpInt - stuckTick
+        // Remedio 1: linha reta ate voce, sem passar pela malha de navegacao.
+        // Sai de praticamente todo encrave sem piscar na tela; na rua ele
+        // pisa no chao do mesmo jeito, so nao desvia de muro.
+        IF dt > CFG_STRAIGHT_MS
+            GET_CLEO_SHARED_VAR CFG_VAR_ROUTE tries
+            IF NOT tries = 1
+                SET_CLEO_SHARED_VAR CFG_VAR_ROUTE 1
+                GOSUB bbg_go_player             // reemite a tarefa, agora reto
+                GET_GAME_TIMER taskTick
+            ENDIF
+        ENDIF
+        // Remedio 2: nem reto ele saiu do lugar. Traz ele para perto de voce.
         IF dt > CFG_STUCK_MS
             GOSUB bbg_can_teleport
             IF flag = 1
@@ -724,6 +779,7 @@ bbg_teleport:
     FIX_CHAR_GROUND_BRIGHTNESS_AND_FADE_IN pedBox TRUE TRUE FALSE
     SET_CHAR_VELOCITY pedBox 0.0 0.0 0.0      // nao herda queda/salto antigo
     // caminho por nodes na rua, linha reta dentro de interior (bbg_go_player)
+    SET_CLEO_SHARED_VAR CFG_VAR_ROUTE 0
     dz = 0.0
     GOSUB bbg_go_player
 
@@ -869,7 +925,14 @@ bbg_pick_front:
 bbg_go_player:
     GOSUB bbg_in_interior
     IF flag = 1
-        GOSUB bbg_go_inside
+        GOSUB bbg_go_straight
+        RETURN
+    ENDIF
+    // Plano B ligado (veja bbg_stuck_check): ele ficou parado num ponto que a
+    // malha de navegacao nao cobre. Vai reto ate voce.
+    GET_CLEO_SHARED_VAR CFG_VAR_ROUTE tries
+    IF tries = 1
+        GOSUB bbg_go_straight
         RETURN
     ENDIF
     IF dz > CFG_SPRINT_D2
@@ -880,14 +943,17 @@ bbg_go_player:
     RETURN
 
     // =======================================================================
-    //  Andar dentro de interior: em linha reta (la dentro nao existe malha
-    //  de navegacao de pedestre) e com o destino NA ALTURA DELE - o piso do
-    //  ambiente, que e o mesmo do player. Quem o faz parar e o bbg_stop_walk,
-    //  a 2,5 m de voce; ele nunca chega a tocar no destino, entao o destino
-    //  poder ser a sua posicao nao causa nada. O tempo da tarefa e longo de
-    //  proposito: se ela expirasse no meio do caminho, daria solavanco.
+    //  Vai RETO ate o player, ignorando a malha de navegacao, com o destino
+    //  na altura do PROPRIO NPC (o piso dele - dentro de ambiente e o mesmo do
+    //  player). Serve para os dois casos: dentro de interior, onde nao existe
+    //  malha de pedestre e esse e o caminho normal, e na rua, como plano B de
+    //  quem travou num ponto que a malha nao cobre (veja bbg_stuck_check).
+    //  Quem o faz parar e o bbg_stop_walk, a 2,5 m de voce; ele nunca chega a
+    //  tocar no destino, entao o destino poder ser a sua posicao nao causa
+    //  nada. O tempo da tarefa e longo de proposito: se ela expirasse no meio
+    //  do caminho, daria solavanco.
     // =======================================================================
-bbg_go_inside:
+bbg_go_straight:
     GET_CHAR_COORDINATES pedBox nx ny nz      // nz = altura do NPC (o piso)
     CLEAR_CHAR_TASKS pedBox
     TASK_GO_STRAIGHT_TO_COORD pedBox px py nz PEDMOVE_RUN 20000
@@ -934,8 +1000,19 @@ bbg_face_player:
     GET_GAME_TIMER tmpInt
     dt = tmpInt - taskTick
     IF dt > CFG_FACE_MS
-        GET_GAME_TIMER taskTick
-        TASK_TURN_CHAR_TO_FACE_CHAR pedBox playerChar
+        // So vale de perto: a virada troca a tarefa primaria do NPC, e de
+        // longe a prioridade dele e ANDAR (bbg_stuck_check cuida de quem
+        // nao sai do lugar).
+        GET_CHAR_COORDINATES playerChar dx dy dz
+        dx = dx - nx
+        dy = dy - ny
+        dx = dx * dx
+        dy = dy * dy
+        dx = dx + dy
+        IF dx < CFG_FACE_RANGE_D2
+            GET_GAME_TIMER taskTick
+            TASK_TURN_CHAR_TO_FACE_CHAR pedBox playerChar
+        ENDIF
     ENDIF
     RETURN
 
@@ -965,6 +1042,8 @@ bbg_place_front:
         SET_CHAR_VELOCITY pedBox 0.0 0.0 0.0  // corta a queda que ele trazia
         FIX_CHAR_GROUND_BRIGHTNESS_AND_FADE_IN pedBox TRUE TRUE FALSE
     ENDIF
+    // Reposicionado: rota normal de novo.
+    SET_CLEO_SHARED_VAR CFG_VAR_ROUTE 0
     dz = 0.0
     GOSUB bbg_go_player
     GET_GAME_TIMER taskTick

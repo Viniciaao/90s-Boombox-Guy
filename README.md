@@ -61,8 +61,14 @@ dispensar, morrer: nada disso mostra texto.
 - **Fuga (carro/avião) sem lugar para ele**: se você se afastar muito e
   **pisar de volta no chão**, ele é teleportado para junto de você (também
   atrás, para não "aparecer do nada" na sua cara).
-- **NPC preso**: se ele ficar parado num canto (parede, cerca, beco) por
-  6 segundos longe de você, ele também volta a aparecer perto.
+- **NPC preso / "ele parou e não vem mais"**: se ele travar num canto (parede,
+  cerca, porta, escada, ponto que a malha de navegação não cobre) o script
+  percebe pela **velocidade** dele e reage em três passos, do mais discreto
+  para o mais visível: reenvia a ordem de seguir (1 s); se em 0,7 s ele não
+  saiu do lugar, passa a ir **em linha reta** até você, ignorando a malha de
+  navegação — sem nada aparecer na tela; e se em 3,5 s ainda não saiu do
+  lugar, ele reaparece perto de você. A rota normal volta sozinha quando ele
+  chega perto.
 - **Sem blip no mapa**, sem marcador, sem ícone.
 - Ele **não reage ao mundo**: não foge, não se assusta, não briga, não
   pertence à sua gangue. Isso é feito com um *decision maker* vazio
@@ -160,7 +166,10 @@ com `./build.sh` (ou `make`).
 | `CFG_FALL_Z` | `25.0` | Se o NPC ficar 25 m abaixo de você, é resgatado |
 | `CFG_STOP_DIST` | `2.5` | Raio em que ele para de andar |
 | `CFG_TELEPORT_MS` | `1500` | Quanto tempo longe (e a pé) antes de teleportar |
-| `CFG_STUCK_MS` | `6000` | Quanto tempo parado longe antes de teleportar |
+| `CFG_STUCK_MS` | `3500` | Quanto tempo **sem sair do lugar** antes do resgate |
+| `CFG_STILL_SPEED` | `1.0` | Abaixo desta velocidade (o `06AC` já vem ×50) ele conta como parado |
+| `CFG_STRAIGHT_MS` | `700` | Quanto tempo travado até passar a ir em linha reta |
+| `CFG_FACE_RANGE_D2` | `400.0` | Distância² (20 m) até onde ele se vira para você |
 | `CFG_RETASK_MS` | `1000` | Intervalo entre comandos de seguir |
 | `CFG_CAR_RETASK_MS` | `2000` | Intervalo entre tentativas de entrar no seu veículo |
 | `CFG_LOAD_MS` | `10000` | Timeout ao carregar modelos/mundo |
@@ -365,11 +374,32 @@ bagunçadas):
   caminhada a cada quadro. Já o reposicionamento por troca de área só
   acontece se ele estiver a mais de 1,5 m do ponto: mover um passo
   apareceria como teleporte, então nesse caso o script só reenvia a tarefa.
+- **Nunca fica plantado**: quem cuida de "ele deveria estar vindo e não sai do
+  lugar" é o `bbg_stuck_check`. O teste antigo era só o estado do motor
+  (`GET_CHAR_MOVE_STATE`, CLEO+ `0ECB`), e isso só enxerga **um** dos dois
+  jeitos de ele travar: quem está sem tarefa nenhuma. Quem ficou com a tarefa
+  de correr presa em algum canto (porta, escada, ponto sem nó de caminho)
+  aparece como "correndo" para o motor — ele ficava parado para sempre, sem
+  nem o teleporte de resgate vir. Agora a conta usa a **velocidade de
+  verdade** (`GET_CHAR_SPEED`, `0x6AC`, que o jogo devolve já multiplicada por
+  50), que é zero nos dois casos, e o cronômetro só corre enquanto ele está
+  longe (> 3 m). Ordem das providências: (1) a tarefa é reenviada a cada 1 s
+  de qualquer forma; (2) 0,7 s travado ⇒ liga o "modo linha reta"
+  (`CFG_VAR_ROUTE`, uma var do CLEO, porque as 32 vars locais do script já
+  estão todas em uso), que troca
+  `TASK_FOLLOW_PATH_NODES_TO_COORD_WITH_RADIUS` por
+  `TASK_GO_STRAIGHT_TO_COORD` — a mesma tarefa dos interiores — sem piscar
+  nada na tela; (3) 3,5 s travado ⇒ resgate por teleporte (o de sempre). O
+  modo linha reta volta a 0 assim que ele chega perto de você, quando é
+  reposicionado ou quando o NPC é criado de novo.
 - **Sempre virado para você**: `TASK_TURN_CHAR_TO_FACE_CHAR` (`0639`,
   interno `CTaskComplexTurnToFaceEntityOrCoord`) é reenviado a cada 1,5 s
   **só quando ele está parado** — andando, o corpo já aponta para onde ele
-  vai. A tarefa segura uma referência do CJ com contagem de referência do
-  próprio jogo (`SafeRegisterRef`), então não sobra ponteiro solto.
+  vai. Isso só vale **até 20 m** (`CFG_FACE_RANGE_D2`): a virada troca a
+  tarefa primária do NPC, e de longe a prioridade dele é andar — quem cuida
+  de quem não sai do lugar é o `bbg_stuck_check`. A tarefa segura uma
+  referência do CJ com contagem de referência do próprio jogo
+  (`SafeRegisterRef`), então não sobra ponteiro solto.
 - **Soco = troca de faixa**: o script olha a **vida dele caindo desde o
   quadro anterior** (`GET_CHAR_HEALTH` `0x226` contra uma var do CLEO), e o
   evento só conta se, naquele instante, as mãos do player estiverem livres
@@ -441,6 +471,23 @@ bagunçadas):
 
 ## Histórico de versões
 
+- **v6.5** — ele nunca mais fica plantado:
+  - **"Saiu do interior e não segue mais"**: o resgate de quem ficava para
+    trás olhava só o estado do motor (`GET_CHAR_MOVE_STATE`). Isso só pega
+    quem está **sem** tarefa nenhuma; quem ficou com a tarefa de correr presa
+    em algum canto (porta, escada, canto de calçada, ponto que a malha de
+    navegação não cobre) já estava "correndo" para o motor e ficava parado
+    para sempre — sem nem o teleporte de resgate acontecer. Agora a conta usa
+    a **velocidade de verdade** (`0x6AC`), zero nos dois casos, e o tempo de
+    tolerância caiu de 6 s para 3,5 s.
+  - **Três remédios em ordem, do mais discreto para o mais visível**:
+    reenvio da tarefa a cada 1 s (como já era); **0,7 s** sem sair do lugar ⇒
+    ele passa a ir **em linha reta** até você, ignorando a malha de navegação
+    (mesma tarefa usada dentro de interior) — sai do encrave sem nada
+    aparecer na tela; **3,5 s** sem sair do lugar ⇒ aparece de novo perto de
+    você. A rota normal volta sozinha quando ele chega perto.
+  - **A virada para o player agora só vale de perto** (até 20 m): de longe a
+    prioridade dele é andar, e a virada troca a tarefa primária do NPC.
 - **v6.4** — convivência:
   - **Ele parava dentro do CJ / te prendia**: o destino da caminhada é a sua
     posição, então ele andava até encostar em você e ficava te empurrando

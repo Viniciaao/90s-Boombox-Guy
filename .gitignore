@@ -1,0 +1,3 @@
+# saida do compilador, so para conferir o bytecode a mao
+#   gta3sc ... -emit-ir2 BoomboxGuy.sc   ->   BoomboxGuy.ir2
+*.ir2
