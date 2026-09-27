@@ -18,15 +18,17 @@ com a música saindo da caixa em **áudio 3D**.
 | `BOOBOXD` | Dispensa o NPC e desliga a música |
 
 Depois de digitar `BOOBOX`, o NPC aparece a poucos metros, corre até você e
-começa a tocar uma faixa aleatória das suas 10. Quando a música acaba, ele
-sorteia outra automaticamente.
+começa a tocar uma faixa sorteada entre as suas músicas. Quando a música
+acaba, ele sorteia outra automaticamente — **sempre aleatório**, nunca em
+ordem, e sem repetir a mesma faixa duas vezes seguidas.
 
-- Se você cruzar a cidade de carro, moto, helicóptero ou avião e **pisar de
-  volta no chão**, ele é teleportado para junto de você (só quando você está
-  a pé, no chão e fora da água) e volta a te seguir.
-- Se ele ficar **preso** em algum canto (parede, cerca, beco) enquanto você
-  se afasta, ele também volta a aparecer perto — o script percebe que ele
-  não chegou mais perto em 6 segundos e teleporta.
+- **Interiores**: se você entrar (ou sair) de qualquer interior, ele vai
+  junto. O script percebe o "salto" de posição do player e leva o NPC na
+  hora, com as mesmas checagens de chão e colisão.
+- **Fuga de carro/moto/helicóptero/avião**: se você se afastar muito e
+  **pisar de volta no chão**, ele é teleportado para junto de você.
+- **NPC preso**: se ele ficar parado num canto (parede, cerca, beco) por
+  6 segundos longe de você, ele também volta a aparecer perto.
 - **Sem blip no mapa**, sem marcador, sem ícone.
 - Ele **não reage ao mundo**: não foge, não se assusta, não briga, não
   pertence à sua gangue. Isso é feito com um *decision maker* vazio
@@ -35,16 +37,20 @@ sorteia outra automaticamente.
 - **Vida padrão** (100). Se ele morrer, acabou: a música para e você precisa
   digitar o cheat de novo.
 - Se você morrer, ele vai embora sozinho.
+- **Em cutscene** (da campanha ou de missão com script) a música é
+  **pausada** e volta de onde parou quando a cutscene acaba — para não
+  sobrepor os diálogos nem interferir no fluxo da missão.
 
 ---
 
 ## Instalação
 
-1. Tenha o **CLEO 4** e o **CLEO+** instalados (o script usa opcodes CLEO+,
-   principalmente para prender a caixa na mão e para o áudio 3D).
+1. Tenha o **CLEO 4** e o **CLEO+** instalados. O script usa opcodes CLEO+
+   (caixa na mão, áudio 3D, detecção de cutscene, leitura do estado do NPC).
+   **Se o CLEO+ não estiver instalado (ou estiver desatualizado), o script
+   avisa na tela e se encerra sozinho, sem crashar o jogo.**
 2. Copie `BoomboxGuy.cs` para a pasta `CLEO/` do GTA San Andreas.
-3. Crie a pasta `CLEO/BoomboxGuy/` e coloque de 1 a 10 músicas com os nomes
-   **fixos**:
+3. Crie a pasta `CLEO/BoomboxGuy/` e coloque suas músicas:
 
 ```
 GTA San Andreas/
@@ -54,12 +60,20 @@ GTA San Andreas/
       som1.mp3
       som2.mp3
       ...
-      som10.mp3
+      som50.mp3
 ```
 
-   Formatos: MP3 (recomendado), OGG, WAV, AIFF — o que o BASS do CLEO
-   conseguir abrir. Arquivos que faltarem são simplesmente pulados (o script
-   sorteia outra faixa); se nenhum for encontrado, ele avisa na tela.
+**Quantidade de músicas: de 1 até 50.** O script **varre a pasta e conta
+quais arquivos existem** (`som1.mp3` … `som50.mp3`) na primeira vez que você
+chama o NPC, mostra na tela quantas encontrou e usa só as que estão lá —
+funciona com 1, 2, 10 ou 50 músicas, e até com numeração "esburacada"
+(por exemplo só `som1`, `som4` e `som9`). Arquivos que faltarem são
+simplesmente ignorados.
+
+Formatos: MP3 (recomendado), OGG, WAV, AIFF — o que o BASS do CLEO
+conseguir abrir. Se nenhum arquivo for encontrado, o script avisa na tela e
+tenta de novo mais tarde (você pode até colocar os arquivos com o jogo
+aberto, sem sair do jogo).
 
 Não é necessário nenhum arquivo DFF/TXD: a caixa de som é o **objeto nativo
 do jogo** `2226 (low_hi_fi_3)`.
@@ -81,16 +95,20 @@ com `./build.sh` (ou `make`).
 | `CFG_BOX_ROT_X/Y/Z` | `0 / 90 / 0` | Rotação fina da caixa |
 | `CFG_SND_OFF_X/Y/Z` | `0.25 / 0.10 / 0.75` | Onde o som 3D nasce em relação ao corpo |
 | `CFG_VOLUME` | `1.0` | Volume da música |
-| `CFG_TRACKS` | `10` | Quantas faixas usar (`som1`..`som10`) |
+| `CFG_MAX_TRACKS` | `50` | Número máximo de faixas que o script procura (`som1..som50`) |
+| `CFG_PATH_SIZE` | `64` | Tamanho do buffer do caminho do MP3 |
+| `CFG_CLEOPLUS_MIN` | `16908288` (`0x01020000` = v1.2.0.0) | Versão mínima do CLEO+ aceita |
 | `CFG_APPEAR_DIST` | `4.0` | Distância em que ele aparece/teleporta |
 | `CFG_FOLLOW_D2` | `9.0` | Distância² (3 m) em que ele começa a te seguir |
 | `CFG_SPRINT_D2` | `400.0` | Distância² (20 m) em que ele corre mais rápido |
 | `CFG_LOST_D2` | `3600.0` | Distância² (60 m) considerado "longe demais" |
+| `CFG_JUMP_D2` | `625.0` | Distância² (25 m) de "salto" do player = troca de interior |
+| `CFG_FALL_Z` | `25.0` | Se o NPC ficar 25 m abaixo de você, é resgatado |
 | `CFG_STOP_DIST` | `2.5` | Raio em que ele para de andar |
 | `CFG_TELEPORT_MS` | `3000` | Quanto tempo longe (e a pé) antes de teleportar |
-| `CFG_STUCK_MS` | `6000` | Quanto tempo preso antes de teleportar |
-| `CFG_RETASK_MS` | `1000` | Intervalo mínimo entre comandos de seguir |
-| `CFG_LOAD_MS` | `6000` | Timeout ao carregar os modelos |
+| `CFG_STUCK_MS` | `6000` | Quanto tempo parado longe antes de teleportar |
+| `CFG_RETASK_MS` | `1000` | Intervalo entre comandos de seguir |
+| `CFG_LOAD_MS` | `10000` | Timeout ao carregar modelos/mundo |
 | `CFG_AUDIO_RETRY_MS` | `20000` | Espera entre tentativas se nenhum MP3 abrir |
 
 ### Ajustando a caixa na mão
@@ -118,15 +136,21 @@ O comando usado é:
 
 ```
 gta3sc --config=gtasa --guesser --cs -fcleo -fno-entity-tracking \
+       --add-config=tools/cleo-plus.xml \
        -o BoomboxGuy.cs BoomboxGuy.sc
 ```
 
 - `--cs` = script CLEO (já implica `-fcleo`).
 - `--guesser` = habilita recursos que a comunidade ainda não mapeou 100%
-  (necessário para `SWITCH` e para o `-fcleo` neste parser).
+  (necessário para `-fcleo` neste parser).
 - `-fno-entity-tracking` = não valida o tipo "entidade" das variáveis
   (handles de char/objeto/áudio) em tempo de compilação — sem isso o
   compilador reclama que `AUDIO_STREAM` não confere com `INT`.
+- **`--add-config=tools/cleo-plus.xml`** = carrega as definições dos opcodes
+  do CLEO+ (o gta3sc puro não conhece `0E2E`, `0EF0`, `0ECB`…). O arquivo é
+  o `cleo.xml` oficial do CLEO+ (MIT), com os enums que já existem na
+  configuração `gtasa` removidos — o gta3sc não aceita o mesmo enum
+  definido duas vezes. Ele vai junto no repositório em `tools/`.
 - `-fconst`, `-fswitch`, `-farrays` já são ligados automaticamente pelo
   `config/gtasa/commandline.txt` do gta3sc, por isso as `CONST_*` funcionam
   sem flag extra.
@@ -136,10 +160,11 @@ gta3sc --config=gtasa --guesser --cs -fcleo -fno-entity-tracking \
 ## Estrutura do repositório
 
 ```
-BoomboxGuy.sc        fonte (gta3script) — é aqui que você mexe
-BoomboxGuy.cs        compilado (vai para CLEO/)
-build.sh / Makefile  builds
-BoomboxGuy/          pasta-exemplo para os MP3 (som1.mp3 ... som10.mp3)
+BoomboxGuy.sc          fonte (gta3script) — é aqui que você mexe
+BoomboxGuy.cs          compilado (vai para CLEO/)
+build.sh / Makefile    builds
+tools/cleo-plus.xml    opcodes do CLEO+ para o gta3sc (MIT, Junior_Djjr)
+BoomboxGuy/            pasta-exemplo para os MP3 (som1.mp3 ... som50.mp3)
 ```
 
 ---
@@ -150,6 +175,29 @@ O script foi escrito pensando em **não crashar**, que era o problema do mod
 original (que chegou a ter correções por causa de variáveis globais
 bagunçadas):
 
+- **Checagem de dependência**: na inicialização o script carrega
+  `CLEO+.cleo` com `LOAD_DYNAMIC_LIBRARY`, pergunta a versão
+  (`GetCleoPlusVersion`) e, se a DLL não existir ou for mais velha que
+  `1.2.0.0`, mostra um alerta explicativo e termina com
+  `TERMINATE_THIS_CUSTOM_SCRIPT` — ou seja, ele nunca chama um opcode do
+  CLEO+ que não existe, o que seria um crash certo.
+- **Checagem de colisão**: antes de criar ou teleportar o NPC o script
+  exige `NOT IS_CHAR_WAITING_FOR_WORLD_COLLISION` (o mundo já carregou em
+  volta do player), pede a colisão do ponto de destino com
+  `REQUEST_COLLISION` e confere o chão com `GET_GROUND_Z_FOR_3D_COORD`. A
+  posição só é aceita se o chão estiver a ±3 m do chão do player — isso
+  evita nascer em telhado, ponte, dentro de prédio ou **cair no vazio
+  embaixo do mapa**. Se nada servir, a última alternativa é o próprio lugar
+  do player (onde o chão com certeza existe).
+  Além disso, se o NPC acabar 25 m abaixo de você (caiu no vazio), o script
+  o resgata.
+- **Interiores**: entrar/sair de interior (ou qualquer teleporte do player)
+  faz a posição do CJ "saltar" mais de 25 m num único quadro. O script
+  detecta esse salto e leva o NPC junto, respeitando as checagens de
+  colisão acima.
+- **Cutscenes**: durante `IS_ON_CUTSCENE` ou `IS_ON_SCRIPTED_CUTSCENE` a
+  música é pausada (`0AAD` ação 2) e retomada de onde parou (ação 3) no
+  fim, e o script evita mexer no NPC no meio da cena.
 - **Nada de variáveis globais do jogo.** Só `LVAR_*` locais do script
   (31 locais, dentro do limite de 32 do CLEO).
 - **Modelos**: os dois modelos (NPC e caixa) são pedidos com `REQUEST_MODEL`
@@ -157,8 +205,11 @@ bagunçadas):
   o script avisa e volta ao estado inicial. Os modelos são liberados com
   `MARK_MODEL_AS_NO_LONGER_NEEDED` sempre em par com o pedido.
 - **Áudio**: `LOAD_3D_AUDIO_STREAM` tem o retorno checado, e o stream é
-  liberado com `REMOVE_AUDIO_STREAM` antes de carregar o próximo e ao
-  dispensar o NPC.
+  liberado com `REMOVE_AUDIO_STREAM` antes de carregar o próximo, ao
+  dispensar o NPC e se ele morrer. O caminho do MP3 é montado num buffer
+  reservado com `ALLOCATE_MEMORY` (liberado automaticamente pelo CLEO quando
+  o script sai) e formatado com `STRING_FORMAT` — nada de overflow de
+  string no script space.
 - **Som por coordenadas, não por link**: o som 3D é reposicionado todo frame
   com `SET_PLAY_3D_AUDIO_STREAM_AT_COORDS` em cima da mão do NPC. As
   variantes `..._AT_CHAR`/`..._AT_OBJECT` guardam um ponteiro para a
@@ -171,14 +222,6 @@ bagunçadas):
   `DELETE_RENDER_OBJECT` depois que o NPC morre — seria ponteiro inválido).
 - **Handle do ped**: todo acesso ao NPC é precedido de `DOES_CHAR_EXIST` e
   `IS_CHAR_DEAD`. O script nunca mexe em um handle morto.
-- **Teleporte** só acontece com o player a pé, **no chão**
-  (`IS_CHAR_REALLY_IN_AIR` falso), **fora da água** e fora de veículo.
-  As posições candidatas em volta do player passam por
-  `GET_GROUND_Z_FOR_3D_COORD` e só são aceitas se o chão estiver perto do
-  chão do player (evita nascer em telhado/ponte/interior); se nenhuma
-  servir, ele cai na própria posição do player.
-- **Quatro posições candidatas** (atrás, laterais e frente) são testadas, do
-  jeito que o `GET_COORD_FROM_ANGLED_DISTANCE` do CLEO+ calcula.
 - O loop principal tem `WAIT 0`, e o script volta ao estado inicial se o
   player morrer, se o char sumir do pool, se o NPC morrer ou se for
   dispensado.
@@ -193,5 +236,6 @@ bagunçadas):
 - Mod original: **90s Boombox** por *Guidopdu*
   ([MixMods](https://www.mixmods.com.br/2016/02/90s-boombox-andar-ouvindo-radio/))
   — 10 faixas, som direcional e a ideia de "andar ouvindo rádio".
-- CLEO+ por *Junior_Djjr* (MIT).
+- CLEO+ por *Junior_Djjr* (MIT) — inclusive as definições de opcodes em
+  `tools/cleo-plus.xml`.
 - Este remake: escrito em gta3script/CLEO+ para GTA San Andreas.

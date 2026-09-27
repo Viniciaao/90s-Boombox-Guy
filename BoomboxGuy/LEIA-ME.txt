@@ -3,10 +3,18 @@ Coloque aqui as musicas do Boombox Guy:
     som1.mp3
     som2.mp3
     ...
-    som10.mp3
+    som50.mp3
 
-Sao 10 faixas (nomes fixos, exatamente como no mod original). O script sorteia
-uma a cada vez que a musica termina.
+Voce pode usar de 1 ate 50 musicas. O script confere quais arquivos existem
+e avisa na tela quantas encontrou na primeira vez que voce chama o NPC
+(cheat BOOBOX). Arquivos que faltarem sao simplesmente ignorados - pode ter
+so a som1.mp3, ou som1/som4/som9, que funciona do mesmo jeito.
+
+A ordem e sempre aleatoria (nunca sequencial) e o script evita repetir a
+mesma faixa duas vezes seguidas.
+
+Formatos aceitos: MP3 (recomendado), OGG, WAV, AIFF - o que o BASS do CLEO
+conseguir abrir.
 
 No jogo, a estrutura final fica:
 
@@ -16,7 +24,4 @@ No jogo, a estrutura final fica:
         BoomboxGuy/        <- esta pasta com os MP3
           som1.mp3
           ...
-          som10.mp3
-
-Formatos aceitos: MP3 (recomendado), OGG, WAV, AIFF - o que o BASS do CLEO
-conseguir abrir. Se nenhum arquivo for encontrado, o script avisa na tela.
+          som50.mp3

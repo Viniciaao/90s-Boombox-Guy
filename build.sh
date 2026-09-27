@@ -15,6 +15,8 @@ ROOT="$PWD"
 
 SRC="BoomboxGuy.sc"
 OUT="BoomboxGuy.cs"
+# definicoes de opcodes do CLEO+ usadas pelo script (vai junto no repositorio)
+CLEOPLUS_XML="$ROOT/tools/cleo-plus.xml"
 
 # 1) $GTA3SC  2) PATH  3) caminhos comuns no sandbox de desenvolvimento
 GTA3SC="${GTA3SC:-}"
@@ -22,8 +24,6 @@ if [ -z "$GTA3SC" ]; then
     if command -v gta3sc >/dev/null 2>&1; then
         GTA3SC="$(command -v gta3sc)"
     elif [ -x "$HOME/work/gta3sc/gta3sc" ]; then
-        # a copia na raiz do repo do gta3sc acha a pasta config/ por estar
-        # ao lado do executavel
         GTA3SC="$HOME/work/gta3sc/gta3sc"
     else
         echo "erro: gta3sc nao encontrado." >&2
@@ -33,8 +33,14 @@ if [ -z "$GTA3SC" ]; then
     fi
 fi
 
+if [ ! -f "$CLEOPLUS_XML" ]; then
+    echo "erro: nao achei $CLEOPLUS_XML" >&2
+    exit 1
+fi
+
 echo ">> compilando $SRC com $GTA3SC"
 "$GTA3SC" --config=gtasa --guesser --cs -fcleo -fno-entity-tracking \
+    --add-config="$CLEOPLUS_XML" \
     -o "$ROOT/$OUT" "$ROOT/$SRC"
 
 echo ">> ok: $OUT ($(wc -c < "$ROOT/$OUT") bytes)"

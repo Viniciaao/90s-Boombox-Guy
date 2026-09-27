@@ -10,12 +10,18 @@
 //     BOOBOX    chama o NPC
 //     BOOBOXD   dispensa o NPC e para a musica
 //
-//  Instalacao:
-//     CLEO/BoomboxGuy.cs
-//     CLEO/BoomboxGuy/som1.mp3 ... som10.mp3
+//  Musicas: CLEO/BoomboxGuy/som1.mp3 ... som50.mp3
+//     O script CONFERE quais arquivos existem e usa so os que estao la.
+//     Pode ter 1, 2, 10, 50 - funciona com qualquer quantidade (ate 50),
+//     inclusive com numeracao esburacada (som1, som4, som9...).
+//     A ordem e sempre aleatoria (nunca sequencial) e evita repetir a
+//     mesma faixa duas vezes seguidas.
 //
-//  Como compilar:
+//  Requisitos: CLEO 4 + CLEO+ (o script checa o CLEO+ e avisa se faltar)
+//
+//  Como compilar (veja tambem build.sh / Makefile):
 //     gta3sc --config=gtasa --guesser --cs -fcleo -fno-entity-tracking \
+//            --add-config=<caminho>/tools/cleo-plus.xml \
 //            -o BoomboxGuy.cs BoomboxGuy.sc
 // ===========================================================================
 
@@ -41,48 +47,75 @@ SCRIPT_NAME bbguy
     CONST_FLOAT CFG_SND_OFF_Y       0.10
     CONST_FLOAT CFG_SND_OFF_Z       0.75
     CONST_FLOAT CFG_VOLUME          1.0
-    // Quantas faixas usar (som1.mp3 ... somN.mp3), no maximo 10.
-    CONST_INT   CFG_TRACKS          10
+    // Musicas: som1.mp3 ... somCFG_MAX_TRACKS.mp3 (maximo 50).
+    CONST_INT   CFG_MAX_TRACKS      50
+    CONST_INT   CFG_PATH_SIZE       64      // tamanho do buffer do caminho
+    // Versao minima do CLEO+ exigida (0x01020000 = v1.2.0.0).
+    CONST_INT   CFG_CLEOPLUS_MIN    16908288
     // Distancias (os valores D2 sao o quadrado da distancia, em metros).
     CONST_FLOAT CFG_APPEAR_DIST     4.0     // onde ele aparece/teleporta
     CONST_FLOAT CFG_FOLLOW_D2       9.0     // (3 m) comeca a te seguir
     CONST_FLOAT CFG_SPRINT_D2       400.0   // (20 m) corre mais rapido
     CONST_FLOAT CFG_LOST_D2         3600.0  // (60 m) player longe demais
+    CONST_FLOAT CFG_JUMP_D2         625.0   // (25 m) "salto" do player = interior
+    CONST_FLOAT CFG_FALL_Z          25.0    // NPC abaixo disso = caiu no vazio
     CONST_FLOAT CFG_STOP_DIST       2.5     // raio em que ele para
     CONST_INT   CFG_TELEPORT_MS     3000    // longe por quanto tempo
-    CONST_INT   CFG_STUCK_MS        6000    // preso por quanto tempo
+    CONST_INT   CFG_STUCK_MS        6000    // parado por quanto tempo
     CONST_INT   CFG_RETASK_MS       1000    // intervalo entre tarefas
-    CONST_INT   CFG_LOAD_MS         6000    // timeout ao carregar modelos
-    CONST_INT   CFG_AUDIO_RETRY_MS  20000   // espera para tentar audio
+    CONST_INT   CFG_LOAD_MS         10000   // timeout ao carregar modelos/mundo
+    CONST_INT   CFG_AUDIO_RETRY_MS  20000   // espera para tentar audio de novo
 // ===========================================================================
 
-    LVAR_INT   gstate pedBox objBox boxStream curTrack boxTries
-    LVAR_INT   playerChar loadTick taskTick farTick stuckTick tmpInt posOk
-    LVAR_INT   dt boxTick
-    LVAR_FLOAT px py pz nx ny nz dx dy dz d2 gz
-    LVAR_FLOAT heading spawnAng oldD2 lastX lastY
+    LVAR_INT   gstate pedBox objBox boxStream playerChar
+    LVAR_INT   loadTick nextAudioTick farTick stuckTick taskTick
+    LVAR_INT   bufPath trackCount lastTrack flag tmpInt dt tries
+    LVAR_FLOAT px py pz nx ny nz dx dy dz d2
+    LVAR_FLOAT heading spawnAng prevPX prevPY
 
     // gstate: 0 = esperando o cheat | 1 = carregando modelos | 2 = ativo
-    gstate      = 0
-    pedBox      = 0
-    objBox      = 0
-    boxStream   = 0
-    curTrack    = 0
-    boxTries    = 0
-    playerChar  = 0
-    taskTick    = 0
-    farTick     = -1
-    stuckTick   = -1
-    oldD2       = 0.0
-    lastX       = 0.0
-    lastY       = 0.0
+    gstate       = 0
+    pedBox       = 0
+    objBox       = 0
+    boxStream    = 0
+    playerChar   = 0
+    bufPath      = 0
+    trackCount   = 0
+    lastTrack    = 0
+    loadTick     = 0
+    nextAudioTick= 0
+    taskTick     = 0
+    farTick      = -1
+    stuckTick    = -1
+    flag         = 0
+    tmpInt       = 0
+    dt           = 0
+    tries        = 0
+    px           = 0.0
+    py           = 0.0
+    pz           = 0.0
+    prevPX       = 0.0
+    prevPY       = 0.0
+
+    // ---------------------------------------------------------------
+    //  Inicializacao: confere o CLEO+ e reserva o buffer do caminho
+    // ---------------------------------------------------------------
+    GOSUB bbg_check_deps
+    GOSUB bbg_alloc_path
 
     WHILE TRUE
         WAIT 0
 
+        // O handle do CJ muda quando ele morre e renasce: atualiza sempre.
+        IF IS_PLAYER_PLAYING 0
+            GET_PLAYER_CHAR 0 playerChar
+        ELSE
+            playerChar = 0
+        ENDIF
+
         IF gstate = 0
             // ------------------ parado: espera o cheat ------------------
-            IF IS_PLAYER_PLAYING 0
+            IF NOT playerChar = 0
             AND TEST_CHEAT "BOOBOX"
                 GOSUB bbg_request
             ENDIF
@@ -100,6 +133,38 @@ SCRIPT_NAME bbguy
     TERMINATE_THIS_CUSTOM_SCRIPT
 
     // =======================================================================
+    //  Checagem de dependencia: o mod precisa do CLEO+ instalado.
+    //  Se faltar (ou estiver velho), avisa na tela e encerra sem crashar.
+    // =======================================================================
+bbg_check_deps:
+    IF LOAD_DYNAMIC_LIBRARY "CLEO+.cleo" (tmpInt)
+        IF GET_DYNAMIC_LIBRARY_PROCEDURE "GetCleoPlusVersion" tmpInt (dt)
+            CALL_FUNCTION_RETURN dt 0 0 ()(tries)
+            FREE_DYNAMIC_LIBRARY tmpInt
+            IF tries < CFG_CLEOPLUS_MIN
+                PRINT_STRING "~r~Boombox Guy~n~~w~Seu CLEO+ esta desatualizado.~n~Atualize o CLEO+ e entre de novo." 9000
+                TERMINATE_THIS_CUSTOM_SCRIPT
+            ENDIF
+            RETURN
+        ENDIF
+        FREE_DYNAMIC_LIBRARY tmpInt
+    ENDIF
+    PRINT_STRING "~r~Boombox Guy precisa do CLEO+~n~~w~Instale o CLEO+ (CLEO+.cleo) na pasta CLEO~n~e digite o cheat de novo." 9000
+    TERMINATE_THIS_CUSTOM_SCRIPT
+    RETURN
+
+    // =======================================================================
+    //  Buffer onde o caminho da musica e montado (ex.: CLEO\BoomboxGuy\som7.mp3)
+    // =======================================================================
+bbg_alloc_path:
+    bufPath = 0
+    ALLOCATE_MEMORY CFG_PATH_SIZE bufPath
+    IF bufPath = 0
+        PRINT_STRING "~r~Boombox Guy: falha ao reservar memoria para os caminhos." 6000
+    ENDIF
+    RETURN
+
+    // =======================================================================
     //  Cheat BOOBOX: pede os modelos e passa para a fase de carregamento
     // =======================================================================
 bbg_request:
@@ -114,27 +179,30 @@ bbg_request:
     REQUEST_MODEL CFG_PED_MODEL
     REQUEST_MODEL CFG_BOX_MODEL
     GET_GAME_TIMER loadTick
-    GET_GAME_TIMER boxTick
-    boxTries = 0
+    nextAudioTick = 0
     gstate = 1
     PRINT_STRING "~y~Boombox Guy: chamando o cara do som..." 2000
     RETURN
 
     // =======================================================================
-    //  Espera os modelos ficarem prontos e cria o NPC
+    //  Espera os modelos E o mundo (colisao) carregarem antes de criar o NPC
     // =======================================================================
 bbg_wait_models:
-    IF HAS_MODEL_LOADED CFG_PED_MODEL
-    AND HAS_MODEL_LOADED CFG_BOX_MODEL
-        GOSUB bbg_spawn
-        RETURN
-    ENDIF
     GET_GAME_TIMER tmpInt
-    tmpInt = tmpInt - loadTick
-    IF tmpInt > CFG_LOAD_MS
+    dt = tmpInt - loadTick
+    IF dt > CFG_LOAD_MS
         PRINT_STRING "~r~Boombox Guy: nao consegui carregar os modelos. Tente de novo." 4000
         GOSUB bbg_release_models
         gstate = 0
+        RETURN
+    ENDIF
+    IF HAS_MODEL_LOADED CFG_PED_MODEL
+    AND HAS_MODEL_LOADED CFG_BOX_MODEL
+        // checagem de colisao: nao cria o NPC antes do mundo estar pronto
+        IF IS_CHAR_WAITING_FOR_WORLD_COLLISION playerChar
+            RETURN
+        ENDIF
+        GOSUB bbg_spawn
     ENDIF
     RETURN
 
@@ -146,26 +214,7 @@ bbg_spawn:
     GET_CHAR_COORDINATES playerChar px py pz
     GET_CHAR_HEADING playerChar heading
 
-    posOk = 0
-    spawnAng = heading
-    GOSUB bbg_find_pos
-    IF posOk = 0
-        spawnAng = heading + 90.0
-        GOSUB bbg_find_pos
-    ENDIF
-    IF posOk = 0
-        spawnAng = heading - 90.0
-        GOSUB bbg_find_pos
-    ENDIF
-    IF posOk = 0
-        spawnAng = heading + 180.0
-        GOSUB bbg_find_pos
-    ENDIF
-    IF posOk = 0
-        nx = px
-        ny = py
-        nz = pz
-    ENDIF
+    GOSUB bbg_pick_spawn
 
     CREATE_CHAR PEDTYPE_CIVMALE CFG_PED_MODEL nx ny nz pedBox
     IF pedBox = 0
@@ -183,15 +232,22 @@ bbg_spawn:
     TASK_TOGGLE_PED_THREAT_SCANNER pedBox FALSE FALSE FALSE
 
     GOSUB bbg_make_box
-    GOSUB bbg_new_track
+    GET_GAME_TIMER loadTick          // timer das tentativas de criar a caixa
+    GOSUB bbg_play_track             // conta as musicas e sorteia a primeira
+    IF trackCount = 0
+        PRINT_STRING "~r~Boombox Guy: nenhum MP3 encontrado.~n~~w~Coloque som1.mp3 ... som50.mp3 em CLEO\BoomboxGuy\" 6000
+    ENDIF
+    IF bufPath = 0
+        GOSUB bbg_alloc_path
+    ENDIF
 
-    GET_GAME_TIMER boxTick
+    // ja manda ele vir correndo atras de voce
+    TASK_FOLLOW_PATH_NODES_TO_COORD_WITH_RADIUS pedBox px py pz PEDMOVE_RUN -1 CFG_STOP_DIST
     GET_GAME_TIMER taskTick
-    lastX = px
-    lastY = py
+    prevPX = px
+    prevPY = py
     farTick = -1
     stuckTick = -1
-    oldD2 = 0.0
     gstate = 2
     PRINT_STRING "~y~Boombox Guy~n~~w~Ele esta indo ate voce. (BOOBOXD dispensa)" 4500
     RETURN
@@ -224,11 +280,6 @@ bbg_active:
     ENDIF
 
     // Player morreu/recarregou? Dispensa o NPC.
-    IF IS_PLAYER_PLAYING 0
-        GET_PLAYER_CHAR 0 playerChar
-    ELSE
-        playerChar = 0
-    ENDIF
     IF playerChar = 0
         GOSUB bbg_dismiss
         RETURN
@@ -243,17 +294,31 @@ bbg_active:
         RETURN
     ENDIF
 
-    // Deu problema para criar a caixa? Tenta de novo a cada 500 ms.
+    // ---------------------------------------------------------------------
+    //  CUTSCENE (da campanha ou com script): pausa a musica para nao
+    //  sobrepor os dialogos e nao interfere no fluxo da missao.
+    // ---------------------------------------------------------------------
+    IF IS_ON_CUTSCENE
+    OR IS_ON_SCRIPTED_CUTSCENE
+        IF NOT boxStream = 0
+            SET_AUDIO_STREAM_STATE boxStream 2       // pausa
+        ENDIF
+        prevPX = px
+        prevPY = py
+        RETURN
+    ENDIF
+
+    // Deu problema para criar a caixa? Tenta de novo a cada meio segundo.
     IF objBox = 0
         GET_GAME_TIMER tmpInt
-        IF tmpInt > boxTick
-            GET_GAME_TIMER boxTick
-            boxTick = boxTick + 500
+        IF tmpInt > loadTick
+            GET_GAME_TIMER loadTick
+            loadTick = loadTick + 500
             GOSUB bbg_make_box
         ENDIF
     ENDIF
 
-    // Distancia (ao quadrado) entre o NPC e o player.
+    // Posicoes atuais
     GET_CHAR_COORDINATES playerChar px py pz
     GET_CHAR_COORDINATES pedBox nx ny nz
     dx = px - nx
@@ -265,101 +330,78 @@ bbg_active:
     d2 = dx + dy
     d2 = d2 + dz
 
+    // ---------------------------------------------------------------------
+    //  INTERIOR: quando o player entra/sai de um interior (ou e teleportado),
+    //  a posicao dele "salta" de uma vez. Detectando esse salto, o NPC vai
+    //  junto na hora, em vez de ficar do lado de fora.
+    // ---------------------------------------------------------------------
+    dx = px - prevPX
+    dy = py - prevPY
+    dx = dx * dx
+    dy = dy * dy
+    dz = dx + dy
+    prevPX = px
+    prevPY = py
+    IF dz > CFG_JUMP_D2
+        GOSUB bbg_can_teleport
+        IF flag = 1
+            GOSUB bbg_teleport
+            RETURN
+        ENDIF
+    ENDIF
+
+    // ---------------------------------------------------------------------
+    //  NPC caiu no vazio (embaixo do mapa)? Resgata ele.
+    // ---------------------------------------------------------------------
+    dz = pz - nz
+    IF dz > CFG_FALL_Z
+        GOSUB bbg_can_teleport
+        IF flag = 1
+            GOSUB bbg_teleport
+            RETURN
+        ENDIF
+    ENDIF
+
     // ------------------------------- seguir -------------------------------
     IF d2 > CFG_FOLLOW_D2
         GET_GAME_TIMER tmpInt
-        IF taskTick = 0
-            taskTick = tmpInt
-        ENDIF
         dt = tmpInt - taskTick
         IF dt > CFG_RETASK_MS
-            // so da a tarefa de novo se o player se mexeu, ou se ja faz
-            // muito tempo que ele esta andando atras
-            dx = px - lastX
-            dy = py - lastY
-            dx = dx * dx
-            dy = dy * dy
-            dz = dx + dy
-            IF dz > 4.0
-            OR dt > 4000
-                GET_GAME_TIMER taskTick
-                lastX = px
-                lastY = py
-                IF d2 > CFG_SPRINT_D2
-                    TASK_FOLLOW_PATH_NODES_TO_COORD_WITH_RADIUS pedBox px py pz PEDMOVE_SPRINT -1 CFG_STOP_DIST
-                ELSE
-                    TASK_FOLLOW_PATH_NODES_TO_COORD_WITH_RADIUS pedBox px py pz PEDMOVE_RUN -1 CFG_STOP_DIST
-                ENDIF
+            GET_GAME_TIMER taskTick
+            IF d2 > CFG_SPRINT_D2
+                TASK_FOLLOW_PATH_NODES_TO_COORD_WITH_RADIUS pedBox px py pz PEDMOVE_SPRINT -1 CFG_STOP_DIST
+            ELSE
+                TASK_FOLLOW_PATH_NODES_TO_COORD_WITH_RADIUS pedBox px py pz PEDMOVE_RUN -1 CFG_STOP_DIST
             ENDIF
         ENDIF
-    ELSE
-        taskTick = 0
     ENDIF
 
     // ----------------------------- teleporte ------------------------------
+    // Longe demais? So teleporta quando o player estiver a pe, no chao,
+    // fora da agua e com o mundo (colisao) ja carregado.
     IF d2 > CFG_LOST_D2
         GOSUB bbg_lost_check
     ELSE
         farTick = -1
     ENDIF
 
-    // ---------------- ficou preso sem conseguir chegar perto? ------------
+    // ------------------------- preso / parado longe -----------------------
     IF d2 > CFG_FOLLOW_D2
-        GET_GAME_TIMER tmpInt
-        IF stuckTick < 0
-            stuckTick = tmpInt
-            oldD2 = d2
-        ENDIF
-        dt = tmpInt - stuckTick
-        IF dt > CFG_STUCK_MS
-            IF d2 < oldD2
-                // chegou mais perto: continua andando, reinicia a contagem
-                stuckTick = tmpInt
-                oldD2 = d2
-            ELSE
-                // nao saiu do lugar: teleporta para perto do player
-                GOSUB bbg_teleport
-                RETURN
-            ENDIF
-        ENDIF
+        GOSUB bbg_stuck_check
     ELSE
         stuckTick = -1
-        oldD2 = d2
     ENDIF
 
     // -------------------------------- som --------------------------------
-    IF NOT boxStream = 0
-        // som 3D na altura da mao (a caixa fica presa no osso da mao)
-        GET_OFFSET_FROM_CHAR_IN_WORLD_COORDS pedBox CFG_SND_OFF_X CFG_SND_OFF_Y CFG_SND_OFF_Z dx dy dz
-        SET_PLAY_3D_AUDIO_STREAM_AT_COORDS boxStream dx dy dz
-        GET_AUDIO_STREAM_STATE boxStream tmpInt
-        IF tmpInt < 1
-            // a musica terminou: sorteia outra
-            GOSUB bbg_new_track
-        ENDIF
-    ELSE
-        GET_GAME_TIMER tmpInt
-        IF tmpInt > loadTick
-            GET_GAME_TIMER loadTick
-            loadTick = loadTick + CFG_AUDIO_RETRY_MS
-            GOSUB bbg_new_track
-        ENDIF
-    ENDIF
+    GOSUB bbg_audio
     RETURN
 
     // =======================================================================
-    //  Player longe demais: so teleporta com ele a pe e no chao
+    //  Player longe demais: espera alguns segundos (a pe e no chao) e teleporta
     // =======================================================================
 bbg_lost_check:
-    IF IS_CHAR_IN_ANY_CAR playerChar
-        farTick = -1
-        RETURN
-    ENDIF
-    IF IS_CHAR_IN_WATER playerChar
-        farTick = -1
-        RETURN
-    ENDIF
-    IF IS_CHAR_REALLY_IN_AIR playerChar
+    GOSUB bbg_can_teleport
+    IF flag = 0
         farTick = -1
         RETURN
     ENDIF
@@ -367,39 +409,65 @@ bbg_lost_check:
     IF farTick < 0
         farTick = tmpInt
     ENDIF
-    tmpInt = tmpInt - farTick
-    IF tmpInt > CFG_TELEPORT_MS
+    dt = tmpInt - farTick
+    IF dt > CFG_TELEPORT_MS
         GOSUB bbg_teleport
     ENDIF
     RETURN
 
     // =======================================================================
-    //  Teleporta o NPC para perto do player (atras, ou no lado que der)
+    //  NPC parado (sem andar) e longe por varios segundos? Ele travou em
+    //  algum canto: teleporta para perto do player.
+    // =======================================================================
+bbg_stuck_check:
+    GET_CHAR_MOVE_STATE pedBox tmpInt
+    IF tmpInt < MOVE_STATE_WALK_START
+        GET_GAME_TIMER tmpInt
+        IF stuckTick < 0
+            stuckTick = tmpInt
+        ENDIF
+        dt = tmpInt - stuckTick
+        IF dt > CFG_STUCK_MS
+            GOSUB bbg_can_teleport
+            IF flag = 1
+                GOSUB bbg_teleport
+            ENDIF
+        ENDIF
+    ELSE
+        stuckTick = -1
+    ENDIF
+    RETURN
+
+    // =======================================================================
+    //  O teleporte e seguro agora?
+    //  (player a pe, no chao, fora da agua, fora de veiculo e com o mundo
+    //   ja carregado - isso evita o NPC nascer no vacuo)
+    // =======================================================================
+bbg_can_teleport:
+    flag = 0
+    IF IS_CHAR_WAITING_FOR_WORLD_COLLISION playerChar
+        RETURN
+    ENDIF
+    IF IS_CHAR_IN_ANY_CAR playerChar
+        RETURN
+    ENDIF
+    IF IS_CHAR_REALLY_IN_AIR playerChar
+        RETURN
+    ENDIF
+    IF IS_CHAR_IN_WATER playerChar
+        RETURN
+    ENDIF
+    flag = 1
+    RETURN
+
+    // =======================================================================
+    //  Teleporta o NPC para perto do player
     // =======================================================================
 bbg_teleport:
     GET_CHAR_COORDINATES playerChar px py pz
     GET_CHAR_HEADING playerChar heading
 
-    posOk = 0
-    spawnAng = heading
-    GOSUB bbg_find_pos
-    IF posOk = 0
-        spawnAng = heading + 90.0
-        GOSUB bbg_find_pos
-    ENDIF
-    IF posOk = 0
-        spawnAng = heading - 90.0
-        GOSUB bbg_find_pos
-    ENDIF
-    IF posOk = 0
-        spawnAng = heading + 180.0
-        GOSUB bbg_find_pos
-    ENDIF
-    IF posOk = 0
-        nx = px
-        ny = py
-        nz = pz
-    ENDIF
+    GOSUB bbg_pick_spawn
 
     CLEAR_CHAR_TASKS pedBox
     SET_CHAR_COORDINATES_SIMPLE pedBox nx ny nz
@@ -408,97 +476,185 @@ bbg_teleport:
     TASK_FOLLOW_PATH_NODES_TO_COORD_WITH_RADIUS pedBox px py pz PEDMOVE_RUN -1 CFG_STOP_DIST
 
     GET_GAME_TIMER taskTick
-    lastX = px
-    lastY = py
+    prevPX = px
+    prevPY = py
     farTick = -1
     stuckTick = -1
-    oldD2 = 0.0
     RETURN
 
     // =======================================================================
-    //  Procura um lugar valido em volta do player
-    //  entrada: px py pz (player), spawnAng, CFG_APPEAR_DIST
-    //  saida:   nx ny nz, posOk
+    //  Escolhe um lugar valido em volta do player (atras, laterais, frente)
+    //  entrada: px py pz (player), heading
+    //  saida:   nx ny nz
     // =======================================================================
-bbg_find_pos:
+bbg_pick_spawn:
+    flag = 0
+    spawnAng = heading
+    GOSUB bbg_try_pos
+    IF flag = 0
+        spawnAng = heading + 90.0
+        GOSUB bbg_try_pos
+    ENDIF
+    IF flag = 0
+        spawnAng = heading - 90.0
+        GOSUB bbg_try_pos
+    ENDIF
+    IF flag = 0
+        spawnAng = heading + 180.0
+        GOSUB bbg_try_pos
+    ENDIF
+    IF flag = 0
+        // ultimo recurso: no proprio lugar do player (sempre tem chao ali)
+        nx = px
+        ny = py
+        nz = pz
+    ENDIF
+    RETURN
+
+    // Testa UMA posicao: so aceita se achar o chao perto do chao do player
+    // (evita telhado, ponte ou dentro de predio) - e pede a colisao antes.
+bbg_try_pos:
     GET_COORD_FROM_ANGLED_DISTANCE px py spawnAng CFG_APPEAR_DIST nx ny
     nz = pz
-    posOk = 0
-    // procura o chao na vertical; se o chao estiver muito longe do chao do
-    // player (telhado, ponte, interior), descarta essa posicao
-    gz = 9999.0
+    flag = 0
+    REQUEST_COLLISION nx ny
     dx = pz + 2.0
-    GET_GROUND_Z_FOR_3D_COORD nx ny dx gz
-    dy = pz - gz
-    IF dy < 3.0
-        IF dy > -3.0
-            nz = gz + 0.5
-            posOk = 1
+    dy = 9999.0
+    GET_GROUND_Z_FOR_3D_COORD nx ny dx dy
+    dz = pz - dy
+    IF dz < 3.0
+        IF dz > -3.0
+            nz = dy + 0.5
+            flag = 1
         ENDIF
     ENDIF
     RETURN
 
     // =======================================================================
-    //  Som: sorteia uma faixa, carrega e toca
+    //  Som 3D: segue a mao do NPC, pausa em cutscene e troca de faixa
     // =======================================================================
-bbg_new_track:
-    GOSUB bbg_stop_audio
-    boxTries = 0
-    WHILE boxTries < 3
-    AND boxStream = 0
-        boxTries = boxTries + 1
-        GENERATE_RANDOM_INT_IN_RANGE 0 CFG_TRACKS curTrack
-        GOSUB bbg_load_track
-    ENDWHILE
+bbg_audio:
     IF boxStream = 0
-        PRINT_STRING "~r~Boombox Guy: nenhum MP3 em CLEO\BoomboxGuy\ (som1.mp3...som10.mp3)." 5000
+        GET_GAME_TIMER tmpInt
+        IF tmpInt > nextAudioTick
+            GET_GAME_TIMER nextAudioTick
+            nextAudioTick = nextAudioTick + CFG_AUDIO_RETRY_MS
+            GOSUB bbg_play_track
+        ENDIF
+        RETURN
+    ENDIF
+    GET_AUDIO_STREAM_STATE boxStream tmpInt
+    IF tmpInt = 2
+        // estava pausado por cutscene: retoma de onde parou
+        SET_AUDIO_STREAM_STATE boxStream 3
+        RETURN
+    ENDIF
+    IF tmpInt < 1
+        // a musica terminou: sorteia outra (nunca em ordem)
+        GOSUB bbg_play_track
+        RETURN
+    ENDIF
+    // som na altura da mao (a caixa fica presa no osso da mao)
+    GET_OFFSET_FROM_CHAR_IN_WORLD_COORDS pedBox CFG_SND_OFF_X CFG_SND_OFF_Y CFG_SND_OFF_Z dx dy dz
+    SET_PLAY_3D_AUDIO_STREAM_AT_COORDS boxStream dx dy dz
+    RETURN
+
+    // =======================================================================
+    //  Detecta quais MP3 existem em CLEO\BoomboxGuy\ (som1..som50)
+    // =======================================================================
+bbg_scan_tracks:
+    trackCount = 0
+    IF bufPath = 0
+        RETURN
+    ENDIF
+    tries = 1
+    WHILE tries <= CFG_MAX_TRACKS
+        GOSUB bbg_build_path
+        IF DOES_FILE_EXIST $bufPath
+            trackCount = trackCount + 1
+        ENDIF
+        tries = tries + 1
+    ENDWHILE
+    IF trackCount > 0
+        PRINT_FORMATTED_NOW "~y~Boombox Guy~n~~w~%d musica(s) encontrada(s) em CLEO\BoomboxGuy\" 4000 trackCount
+    ENDIF
+    RETURN
+
+    // Monta o caminho da faixa de numero 'tries' no buffer
+bbg_build_path:
+    STRING_FORMAT bufPath "CLEO\BoomboxGuy\som%d.mp3" tries
+    RETURN
+
+    // =======================================================================
+    //  Sorteia uma faixa que exista (evita repetir a anterior)
+    //  saida: lastTrack (0 = nenhuma faixa encontrada)
+    // =======================================================================
+bbg_pick_track:
+    tmpInt = 0
+    dt = 0
+    WHILE dt < 12
+    AND tmpInt = 0
+        dt = dt + 1
+        // 0209 sorteia de 'min' ate 'max'-1, entao sorteia 0..49 e soma 1
+        GENERATE_RANDOM_INT_IN_RANGE 0 CFG_MAX_TRACKS tries
+        IF tries >= CFG_MAX_TRACKS
+            tries = 0
+        ENDIF
+        tries = tries + 1
+        GOSUB bbg_build_path
+        IF DOES_FILE_EXIST $bufPath
+            IF NOT tries = lastTrack
+                tmpInt = tries
+            ENDIF
+        ENDIF
+    ENDWHILE
+    IF tmpInt = 0
+        // numeracao esburacada / azar: varre e pega a primeira que existir
+        tries = 1
+        WHILE tries <= CFG_MAX_TRACKS
+        AND tmpInt = 0
+            GOSUB bbg_build_path
+            IF DOES_FILE_EXIST $bufPath
+                tmpInt = tries
+            ENDIF
+            tries = tries + 1
+        ENDWHILE
+    ENDIF
+    lastTrack = tmpInt
+    RETURN
+
+    // =======================================================================
+    //  Carrega e toca a faixa sorteada
+    // =======================================================================
+bbg_play_track:
+    GOSUB bbg_stop_audio
+    IF bufPath = 0
+        // o ALLOCATE_MEMORY pode ter falhado antes: tenta reservar de novo
+        GOSUB bbg_alloc_path
+        IF bufPath = 0
+            RETURN
+        ENDIF
+    ENDIF
+    IF trackCount = 0
+        GOSUB bbg_scan_tracks
+        IF trackCount = 0
+            RETURN
+        ENDIF
+    ENDIF
+    GOSUB bbg_pick_track
+    IF lastTrack = 0
+        RETURN
+    ENDIF
+    tries = lastTrack
+    GOSUB bbg_build_path
+    LOAD_3D_AUDIO_STREAM $bufPath boxStream
+    IF boxStream = 0
+        PRINT_STRING "~r~Boombox Guy: nao consegui abrir o MP3 sorteado." 4000
         RETURN
     ENDIF
     SET_AUDIO_STREAM_VOLUME boxStream CFG_VOLUME
     SET_AUDIO_STREAM_STATE boxStream 1
-    tmpInt = curTrack + 1
-    PRINT_FORMATTED_NOW "~y~Boombox Guy~n~~w~Tocando: som%d.mp3" 3000 tmpInt
-    RETURN
-
-    // Carrega o arquivo da faixa atual (curTrack). boxStream = 0 se falhar.
-    // Os caminhos sao fixos de proposito: nada de montar string em buffer.
-bbg_load_track:
-    boxStream = 0
-    SWITCH curTrack
-        CASE 0
-            LOAD_3D_AUDIO_STREAM "CLEO\BoomboxGuy\som1.mp3" boxStream
-            BREAK
-        CASE 1
-            LOAD_3D_AUDIO_STREAM "CLEO\BoomboxGuy\som2.mp3" boxStream
-            BREAK
-        CASE 2
-            LOAD_3D_AUDIO_STREAM "CLEO\BoomboxGuy\som3.mp3" boxStream
-            BREAK
-        CASE 3
-            LOAD_3D_AUDIO_STREAM "CLEO\BoomboxGuy\som4.mp3" boxStream
-            BREAK
-        CASE 4
-            LOAD_3D_AUDIO_STREAM "CLEO\BoomboxGuy\som5.mp3" boxStream
-            BREAK
-        CASE 5
-            LOAD_3D_AUDIO_STREAM "CLEO\BoomboxGuy\som6.mp3" boxStream
-            BREAK
-        CASE 6
-            LOAD_3D_AUDIO_STREAM "CLEO\BoomboxGuy\som7.mp3" boxStream
-            BREAK
-        CASE 7
-            LOAD_3D_AUDIO_STREAM "CLEO\BoomboxGuy\som8.mp3" boxStream
-            BREAK
-        CASE 8
-            LOAD_3D_AUDIO_STREAM "CLEO\BoomboxGuy\som9.mp3" boxStream
-            BREAK
-        CASE 9
-            LOAD_3D_AUDIO_STREAM "CLEO\BoomboxGuy\som10.mp3" boxStream
-            BREAK
-        DEFAULT
-            boxStream = 0
-            BREAK
-    ENDSWITCH
+    PRINT_FORMATTED_NOW "~y~Boombox Guy~n~~w~Tocando: som%d.mp3" 3000 lastTrack
     RETURN
 
     // =======================================================================
