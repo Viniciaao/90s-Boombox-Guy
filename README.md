@@ -48,6 +48,16 @@ dispensar, morrer: nada disso mostra texto.
   sempre na sua área e, quando ela muda (você entrou, saiu ou trocou de
   sala), o resgate é imediato, no mesmo piso. Lá dentro ele anda em linha
   reta: a malha de navegação de pedestres não cobre interiores.
+- **Ele para a 2,5 m de você.** Nada de entrar dentro do CJ: a caminhada é
+  cancelada antes de chegar em você (vale na rua e no interior), então ele
+  não te empurra mais para dentro de parede nem trava você num canto — e
+  não existe aquele "pulinho" no fim do trajeto. **Parado, ele fica sempre
+  virado para você**, acompanhando com o corpo para onde você for.
+- **Soco = próxima faixa.** De um **soco** nele (de mãos livres, sem arma na
+  mão) e a música **muda na hora** — é o "próxima faixa" do mod, sem tecla
+  nenhuma, feito de dentro do jogo. Tiro, faca, carro e soco de outro NPC
+  não contam; soco não mata o Boombox Guy (a vida dele volta ao normal, ele
+  continua do seu lado).
 - **Fuga (carro/avião) sem lugar para ele**: se você se afastar muito e
   **pisar de volta no chão**, ele é teleportado para junto de você (também
   atrás, para não "aparecer do nada" na sua cara).
@@ -345,6 +355,30 @@ bagunçadas):
   piso), é resgatado antes de virar dano de queda. E lá dentro ele anda em
   linha reta (`TASK_GO_STRAIGHT_TO_COORD`): a malha de navegação não existe
   em interiores, e com o `TASK_FOLLOW_PATH_NODES` ele ficava parado.
+- **Parar antes de chegar**: o destino dele é a sua posição, e quem o faz
+  parar é o script — perto de você (< 2,5 m) e ainda andando, ele recebe um
+  `CLEAR_CHAR_TASKS` (`GET_CHAR_MOVE_STATE`, CLEO+ `0ECB`, diz se ele está
+  andando). Assim ele nunca encosta no destino: não empurra o player e não
+  aparece o "fechamento" da tarefa de andar no último metro (o pulinho que
+  se via em interior). Entre 2,5 m (quando ele para) e 3 m (quando ele volta
+  a andar) existe uma faixa morta de meio metro, que evita ligar/desligar a
+  caminhada a cada quadro. Já o reposicionamento por troca de área só
+  acontece se ele estiver a mais de 1,5 m do ponto: mover um passo
+  apareceria como teleporte, então nesse caso o script só reenvia a tarefa.
+- **Sempre virado para você**: `TASK_TURN_CHAR_TO_FACE_CHAR` (`0639`,
+  interno `CTaskComplexTurnToFaceEntityOrCoord`) é reenviado a cada 1,5 s
+  **só quando ele está parado** — andando, o corpo já aponta para onde ele
+  vai. A tarefa segura uma referência do CJ com contagem de referência do
+  próprio jogo (`SafeRegisterRef`), então não sobra ponteiro solto.
+- **Soco = troca de faixa**: o script olha a **vida dele caindo desde o
+  quadro anterior** (`GET_CHAR_HEALTH` `0x226` contra uma var do CLEO), e o
+  evento só conta se, naquele instante, as mãos do player estiverem livres
+  (`GET_CURRENT_CHAR_WEAPON` `0x470` = 0), o player estiver **a pé**
+  (nada de atropelar contando como soco) e o **último a machucá-lo** tiver
+  sido o player (`HAS_CHAR_BEEN_DAMAGED_BY_CHAR` `0x51A`) com ele ao alcance
+  do braço. Aí sorteia outra faixa na hora e devolve a vida dele a 100 —
+  soco é comando, não briga. Uma sequência rápida de socos conta como um
+  comando só (`CFG_PUNCH_MS` = 700 ms).
 - **Cutscenes**: durante `IS_ON_CUTSCENE` ou `IS_ON_SCRIPTED_CUTSCENE` a
   música é pausada (`0AAD` ação 2) e retomada de onde parou (ação 3) no
   fim, e o script evita mexer no NPC no meio da cena.
@@ -407,6 +441,28 @@ bagunçadas):
 
 ## Histórico de versões
 
+- **v6.4** — convivência:
+  - **Ele parava dentro do CJ / te prendia**: o destino da caminhada é a sua
+    posição, então ele andava até encostar em você e ficava te empurrando
+    (dava para ficar preso em canto de parede). Agora, quando chega a 2,5 m
+    e ainda está andando, a tarefa é cancelada: ele para ao seu lado. Faixa
+    morta de meio metro entre "para" (2,5 m) e "volta a andar" (3 m) para
+    não tremer.
+  - **Pulinho no fim do trajeto (interior)**: era o mesmo destino — o jogo
+    "fechava" o último trecho da caminhada no ponto final, e o ponto final
+    era você. Com ele parando antes, o último trecho não existe mais. De
+    quebra, dentro de interior o destino passa a usar **a altura dele** (o
+    piso do ambiente) em vez da sua, e o reposicionamento por troca de área
+    virou no-op quando ele já está a menos de 1,5 m do ponto (mover um passo
+    parecia teleporte).
+  - **Sempre virado para você** (rua e interior): parado, ele recebe
+    `TASK_TURN_CHAR_TO_FACE_CHAR` a cada 1,5 s e acompanha você com o corpo;
+    andando, nada muda (o corpo já aponta para onde ele vai).
+  - **Soco troca a música** — sem tecla nenhuma: um soco de mãos livres
+    (só do player, a pé, ao alcance) sorteia outra faixa na hora e devolve a
+    vida dele a 100. Tiro, arma branca, atropelamento e soco de outro NPC
+    não contam. Detecção: vida caindo desde o quadro anterior +
+    `0x470` = mãos livres + `0x51A` = o player foi quem bateu.
 - **v6.3** — interiores:
   - **Área errada (aparecia na rua / preso / morte por queda)**: o GTA
     divide o mundo em "áreas" — `0` = rua, `1..18` = interiores — e só

@@ -6,12 +6,17 @@
 //  de voce, fora da camera), corre ate o player carregando uma caixa de som
 //  e passa a te acompanhar com musica 3D saindo da caixa. Ele tambem entra
 //  com voce nos interiores (aparece logo a frente do CJ) e sobe junto no
-//  seu veiculo.
+//  seu veiculo. Andando, ele para a 2,5 m de voce (nunca entra no seu corpo);
+//  parado, fica sempre virado para voce.
 //
 //  Cheats:
 //     BOOBOX      chama o NPC
 //     BOOBOXD     dispensa o NPC e para a musica
 //     BBGUYTUNE   (opcional) liga/desliga o modo de ajuste da caixa na mao
+//
+//  Sem tecla nenhuma: com o NPC do seu lado, de um SOCO nele (de maos
+//  livres, sem arma na mao) e a musica troca na hora - e o "proxima faixa"
+//  do mod, feito no meio do jogo. Soco nao mata ele: a vida volta ao normal.
 //
 //  Musicas: CLEO/BoomboxGuy/som1.mp3 ... som50.mp3
 //     O script CONFERE quais arquivos existem e usa so os que estao la.
@@ -94,6 +99,11 @@ SCRIPT_START
     // var do CLEO, pelo mesmo motivo das de cima. Serve para perceber a troca
     // de ambiente e leva-lo junto na hora (veja bbg_interior).
     CONST_INT   CFG_VAR_AREA        1021
+    // Vida do NPC vista no quadro anterior (para saber quando ele LEVOU dano
+    // agora) e o relogio do ultimo soco contado como troca de musica. Outras
+    // vars do CLEO, pelo mesmo motivo das de cima.
+    CONST_INT   CFG_VAR_HP          1020
+    CONST_INT   CFG_VAR_PUNCH       1019
     // Osso onde a caixa e presa: 24 = mao direita (BONE_R_HAND no Sanny).
     CONST_INT   CFG_BOX_BONE        24
 
@@ -155,6 +165,19 @@ SCRIPT_START
     // mais que isso ABAIXO, saiu da area com chao e esta caindo - era assim
     // que ele morria de queda. Resgata na hora.
     CONST_FLOAT CFG_INSIDE_FALL_Z   3.0
+    // "Perto o bastante" para ele PARAR de andar - o quadrado, em metros
+    // (6,25 = 2,5 m). Com o CFG_FOLLOW_D2 (3 m, quando ele volta a andar)
+    // sobra uma faixa morta de meio metro entre andar e parar: sem ela ele
+    // ficaria ligando e desligando a caminhada a cada quadro.
+    CONST_FLOAT CFG_NEAR_D2         6.25
+    // Reposicionamento de menos de 1,5 m nem acontece (1,5^2 = 2,25): mover
+    // o NPC um passo apareceria como um pulinho do nada na tela.
+    CONST_FLOAT CFG_CLOSE_D2        2.25
+    // De quanto em quanto tempo ele se vira de novo para o player (ms).
+    CONST_INT   CFG_FACE_MS         1500
+    // Intervalo minimo entre dois socos contados (ms): uma sequencia rapida
+    // de socos conta como um comando so.
+    CONST_INT   CFG_PUNCH_MS        700
     // ---- outras distancias (os valores D2 sao o quadrado, em metros) ----
     CONST_FLOAT CFG_FOLLOW_D2       9.0     // (3 m) comeca a te seguir
     CONST_FLOAT CFG_SPRINT_D2       400.0   // (20 m) corre mais rapido
@@ -365,6 +388,7 @@ bbg_spawn:
     GET_AREA_VISIBLE tmpInt
     SET_CHAR_AREA_VISIBLE pedBox tmpInt
     SET_CLEO_SHARED_VAR CFG_VAR_AREA tmpInt
+    SET_CLEO_SHARED_VAR CFG_VAR_HP 100
 
     // (a pose da caixa ja veio do BoomboxGuy.ini, lido no cheat)
     GOSUB bbg_make_box
@@ -456,6 +480,51 @@ bbg_active:
         RETURN
     ENDIF
 
+    // ---------------------------------------------------------------------
+    //  O player deu um SOCO nele? Troca a musica. E o "proxima faixa" do
+    //  mod sem tecla nenhuma: o comando e o proprio soco.
+    //  Como o jogo entrega isso: a vida dele caiu desde o quadro anterior (ou
+    //  seja, levou dano AGORA), quem bateu foi o player (051A) e a "arma" na
+    //  mao do player e o proprio punho (0 = maos livres). Tiro, arma branca,
+    //  carro, bomba e soco de outro NPC nao contam.
+    //  Soco nao mata o Boombox Guy: a vida volta para 100 na mesma hora.
+    // ---------------------------------------------------------------------
+    GET_CHAR_HEALTH pedBox tmpInt
+    GET_CLEO_SHARED_VAR CFG_VAR_HP tries
+    IF NOT tmpInt = tries
+        SET_CLEO_SHARED_VAR CFG_VAR_HP tmpInt      // cura/cheat: so sincroniza
+    ENDIF
+    IF tmpInt < tries                              // levou dano neste quadro
+        GET_CURRENT_CHAR_WEAPON playerChar dt
+        IF dt = 0
+        AND NOT IS_CHAR_IN_ANY_CAR playerChar
+            IF HAS_CHAR_BEEN_DAMAGED_BY_CHAR pedBox playerChar
+                // ...e ele estava ao alcance do braco: 051A guarda "quem me
+                // machucou por ultimo", entao sem esta checagem um tombo do
+                // NPC contaria como soco se o player tivesse socado antes.
+                GET_CHAR_COORDINATES playerChar px py pz
+                GET_CHAR_COORDINATES pedBox nx ny nz
+                dx = px - nx
+                dy = py - ny
+                dx = dx * dx
+                dy = dy * dy
+                dx = dx + dy                   // distancia 2D ao quadrado
+                IF dx < CFG_NEAR_D2
+                    GET_GAME_TIMER dt
+                    GET_CLEO_SHARED_VAR CFG_VAR_PUNCH loadTick
+                    dt = dt - loadTick
+                    IF dt > CFG_PUNCH_MS
+                        GET_GAME_TIMER dt
+                        SET_CLEO_SHARED_VAR CFG_VAR_PUNCH dt
+                        GOSUB bbg_play_track   // proxima faixa, na hora
+                        SET_CHAR_HEALTH pedBox 100
+                        SET_CLEO_SHARED_VAR CFG_VAR_HP 100
+                    ENDIF
+                ENDIF
+            ENDIF
+        ENDIF
+    ENDIF
+
     // Deu problema para criar a caixa? Tenta de novo a cada meio segundo.
     IF objBox = 0
         GET_GAME_TIMER tmpInt
@@ -527,6 +596,16 @@ bbg_active:
             GET_GAME_TIMER taskTick
             GOSUB bbg_go_player
         ENDIF
+    ELSE
+        // Ja esta perto: se ele ainda vinha andando, para (bbg_stop_walk).
+        // Sem isso ele termina a caminhada DENTRO do CJ - empurra o player,
+        // que fica preso - e o jogo "fecha" o ultimo trecho da caminhada no
+        // ponto final, o que em interior aparece como um teleporte do nada.
+        // Parando antes dos dois, nenhum dos dois acontece. A faixa entre
+        // CFG_NEAR_D2 e CFG_FOLLOW_D2 e morta, so para nao tremer.
+        IF dz < CFG_NEAR_D2
+            GOSUB bbg_stop_walk
+        ENDIF
     ENDIF
 
     // ----------------------------- teleporte ------------------------------
@@ -556,6 +635,9 @@ bbg_active:
             RETURN
         ENDIF
     ENDIF
+
+    // ------------------------- virado para o player -----------------------
+    GOSUB bbg_face_player
 
     // -------------------------------- som --------------------------------
     GOSUB bbg_audio
@@ -787,11 +869,7 @@ bbg_pick_front:
 bbg_go_player:
     GOSUB bbg_in_interior
     IF flag = 1
-        IF dz > CFG_SPRINT_D2
-            TASK_GO_STRAIGHT_TO_COORD pedBox px py pz PEDMOVE_SPRINT 1000
-        ELSE
-            TASK_GO_STRAIGHT_TO_COORD pedBox px py pz PEDMOVE_RUN 1000
-        ENDIF
+        GOSUB bbg_go_inside
         RETURN
     ENDIF
     IF dz > CFG_SPRINT_D2
@@ -802,17 +880,91 @@ bbg_go_player:
     RETURN
 
     // =======================================================================
+    //  Andar dentro de interior: em linha reta (la dentro nao existe malha
+    //  de navegacao de pedestre) e com o destino NA ALTURA DELE - o piso do
+    //  ambiente, que e o mesmo do player. Quem o faz parar e o bbg_stop_walk,
+    //  a 2,5 m de voce; ele nunca chega a tocar no destino, entao o destino
+    //  poder ser a sua posicao nao causa nada. O tempo da tarefa e longo de
+    //  proposito: se ela expirasse no meio do caminho, daria solavanco.
+    // =======================================================================
+bbg_go_inside:
+    GET_CHAR_COORDINATES pedBox nx ny nz      // nz = altura do NPC (o piso)
+    CLEAR_CHAR_TASKS pedBox
+    TASK_GO_STRAIGHT_TO_COORD pedBox px py nz PEDMOVE_RUN 20000
+    flag = 1
+    RETURN
+
+    // =======================================================================
+    //  Perto do player e ainda andando? Para. E o que impede ele de entrar
+    //  DENTRO do CJ (empurrando o player e travando ele nos cantos) e de o
+    //  jogo "fechar" a caminhada no ponto final com um pulinho.
+    // =======================================================================
+bbg_stop_walk:
+    IF IS_CHAR_IN_ANY_CAR pedBox
+    OR IS_CHAR_ENTERING_ANY_CAR pedBox
+    OR IS_CHAR_EXITING_ANY_CAR pedBox
+        RETURN
+    ENDIF
+    GET_CHAR_MOVE_STATE pedBox tmpInt
+    IF tmpInt >= MOVE_STATE_WALK_START
+        CLEAR_CHAR_TASKS pedBox
+    ENDIF
+    RETURN
+
+    // =======================================================================
+    //  Sempre virado para o player - dentro e fora de interior.
+    //  So age quando ele NAO esta andando: caminhando, o corpo ja aponta para
+    //  onde ele vai, e trocar a tarefa no meio do passo daria solavanco.
+    //  A tarefa termina sozinha quando ele ja esta de frente, entao ela e
+    //  reenviada de tempos em tempos - cada envio e so um ajuste fino.
+    // =======================================================================
+bbg_face_player:
+    IF IS_CHAR_IN_ANY_CAR pedBox
+    OR IS_CHAR_ENTERING_ANY_CAR pedBox
+    OR IS_CHAR_EXITING_ANY_CAR pedBox
+        RETURN
+    ENDIF
+    IF IS_CHAR_IN_ANY_CAR playerChar
+        RETURN
+    ENDIF
+    GET_CHAR_MOVE_STATE pedBox tmpInt
+    IF tmpInt >= MOVE_STATE_WALK_START
+        RETURN
+    ENDIF
+    GET_GAME_TIMER tmpInt
+    dt = tmpInt - taskTick
+    IF dt > CFG_FACE_MS
+        GET_GAME_TIMER taskTick
+        TASK_TURN_CHAR_TO_FACE_CHAR pedBox playerChar
+    ENDIF
+    RETURN
+
+    // =======================================================================
     //  Poe o NPC na frente do CJ agora - mesmo piso do player, sem passar
     //  pelo teste de chao - e manda ele te seguir. E o que atende tanto a
     //  troca de interior quanto o resgate de quem esta caindo.
     // =======================================================================
 bbg_place_front:
     GET_CHAR_COORDINATES playerChar px py pz
-    GOSUB bbg_pick_front
+    GOSUB bbg_pick_front                      // nx ny nz = ponto na frente do CJ
     CLEAR_CHAR_TASKS pedBox
-    SET_CHAR_COORDINATES_SIMPLE pedBox nx ny nz
-    SET_CHAR_VELOCITY pedBox 0.0 0.0 0.0      // corta a queda que ele trazia
-    FIX_CHAR_GROUND_BRIGHTNESS_AND_FADE_IN pedBox TRUE TRUE FALSE
+    // Ele ja esta praticamente nesse ponto? Entao NAO encosta na posicao: um
+    // reposicionamento de um passo ou menos apareceria como um pulinho do
+    // nada na tela. So a tarefa de seguir e reenviada.
+    GET_CHAR_COORDINATES pedBox dx dy dz
+    dx = dx - nx
+    dy = dy - ny
+    dz = dz - nz
+    dx = dx * dx
+    dy = dy * dy
+    dz = dz * dz
+    dx = dx + dy
+    dx = dx + dz                              // dx = distancia (3D) ao quadrado
+    IF dx > CFG_CLOSE_D2
+        SET_CHAR_COORDINATES_SIMPLE pedBox nx ny nz
+        SET_CHAR_VELOCITY pedBox 0.0 0.0 0.0  // corta a queda que ele trazia
+        FIX_CHAR_GROUND_BRIGHTNESS_AND_FADE_IN pedBox TRUE TRUE FALSE
+    ENDIF
     dz = 0.0
     GOSUB bbg_go_player
     GET_GAME_TIMER taskTick
