@@ -26,16 +26,23 @@ arquivo de configuracao:
 
     BoomboxGuy.ini
 
-Ele guarda a aparencia do NPC, onde a caixa de som fica presa na mao dele e
-o volume:
+Ele guarda a aparencia do NPC, o objeto da caixa de som, onde ela fica presa
+na mao dele e o volume:
 
     [Ped]
-    model=male01   aparencia do NPC: nome do DFF (sem .dff) ou o ID numerico
-                   do modelo. Ex.: male01, wmybu, bmycr, 7...
-                   Serve para skin vanilla ou de mod (inclusive as do
-                   ModLoader). Se o nome nao existir, o NPC usa o modelo
-                   padrao do script - sem aviso e sem erro.
+    model=male01      aparencia do NPC: nome do DFF de um PEDESTRE (sem
+                      .dff) ou o ID numerico do modelo. Ex.: male01, wmybu,
+                      bmycr, 7... Serve para skin vanilla ou de mod
+                      (inclusive as do ModLoader). Se o nome nao existir (ou
+                      nao for de pedestre), o NPC usa o modelo padrao - sem
+                      aviso e sem erro.
     [Caixa]
+    model=low_hi_fi_3 objeto da caixa: nome do DFF de um OBJETO ou o ID
+                      numerico. Ex.: low_hi_fi_3 (= 2226, o padrao), e
+                      qualquer outro objeto do jogo - inclusive de mod.
+                      Se o nome nao existir, se o modelo nao for um objeto
+                      (pedestre e veiculo nao valem) ou se o arquivo dele
+                      nao estiver no jogo, a caixa usa o low_hi_fi_3.
     posX=0.40      posicao da caixa na mao (eixos do osso da mao!)
     posY=0.02
     posZ=0.02
@@ -47,8 +54,11 @@ o volume:
 
 Pode editar o arquivo com o jogo fechado ou aberto: depois de salvar, digite
 o cheat BOOBOX de novo que ele rele tudo (nao precisa reiniciar o jogo).
-O volume e lido a cada troca de musica, e a skin tambem vale para o NPC que
-já esta na rua na proxima vez que voce chamar o cheat.
+O volume e lido a cada troca de musica. A skin e o objeto da caixa valem na
+proxima vez que voce chamar o cheat (BOOBOX relê o arquivo inteiro).
+
+Quem decide o que e skin de NPC e o que e objeto da caixa e o TIPO do
+modelo, nao a secao do arquivo: pedestre vira o NPC, objeto vira a caixa.
 
 Use PONTO decimal (0.5) e nao virgula. Comentarios comecam com ; ou #.
 Chave escrita errado, linha em branco ou valor invalido sao simplesmente

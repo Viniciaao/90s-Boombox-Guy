@@ -30,6 +30,7 @@
 //        model=male01     <- aparencia do NPC: nome do DFF (sem .dff) ou o ID
 //
 //        [Caixa]
+//        model=low_hi_fi_3  <- objeto da caixa: nome do DFF (sem .dff) ou o ID
 //        posX=0.40        <- posicao da caixa na mao
 //        posY=0.02
 //        posZ=0.02
@@ -48,9 +49,13 @@
 //        arquivo e salvo automaticamente. Nada disso aparece em jogo normal.
 //
 //  O nome do DFF e resolvido pelo proprio jogo (via CLEO+), entao serve
-//  qualquer skin: vanilla (male01, wmybu, bmycr...) ou de mod, inclusive as
-//  instaladas por ModLoader. Se o nome nao existir, o NPC usa o modelo
-//  padrao do script, sem aviso nenhum na tela.
+//  qualquer skin/objeto: vanilla (male01, wmybu, bmycr, low_hi_fi_3...) ou de
+//  mod, inclusive os instalados por ModLoader. O script pergunta ao jogo de
+//  que tipo e o modelo: pedestre vira NPC, o resto vira objeto na mao dele -
+//  por isso o "model=" funciona em qualquer secao e nunca troca as bolas.
+//  Se o nome nao existir, se o modelo nao for do tipo certo para o lugar
+//  (NPC = pedestre, caixa = objeto) ou se o arquivo dele nem estiver no jogo,
+//  o padrao de reserva continua valendo, sem aviso nenhum na tela.
 //
 //  Requisitos: CLEO 4 + CLEO+ v1.2 ou mais novo (o script checa e avisa)
 //
@@ -68,9 +73,16 @@ SCRIPT_NAME bbguy
     // Serve so de reserva: quem manda e a chave "model=" do BoomboxGuy.ini
     // (nome do DFF ou ID). Se o ini nao existir/estiver invalido, usa isto.
     CONST_INT   CFG_PED_MODEL       7
-    CONST_INT   CFG_PED_MAX_ID      400     // faixa de IDs aceita como pedestre
     // Caixa de som: 2226 = low_hi_fi_3 (objeto nativo do jogo, sem mods).
     CONST_INT   CFG_BOX_MODEL       2226
+    // Onde fica guardado o modelo da caixa escolhido no ini. As 32 LVARs
+    // estao todas em uso, entao o valor mora numa "variavel do CLEO"
+    // (comandos 0AB3/0AB4, as mesmas que o Sanny chama de var 0/1/2...):
+    // sao 1024 espacos numerados, que sobrevivem de um frame para o outro.
+    // O valor e conferido TODA vez antes de usar (veja bbg_box_model), entao
+    // se algum outro script escrever por cima dele o pior que pode acontecer
+    // e a caixa voltar para CFG_BOX_MODEL - nunca um modelo invalido.
+    CONST_INT   CFG_VAR_BOX         1023
     // Osso onde a caixa e presa: 24 = mao direita (BONE_R_HAND no Sanny).
     CONST_INT   CFG_BOX_BONE        24
 
@@ -252,16 +264,28 @@ bbg_request:
     // relê o ini: da para editar o arquivo e so digitar o cheat de novo
     flag = 0
     GOSUB bbg_ini_load
-    // o modelo do ped (nome OU id) foi resolvido na leitura do ini; aqui so
-    // confirmamos que ele existe mesmo antes de pedir para carregar
+    // O modelo do ped (nome OU id) foi resolvido na leitura do ini. Ultima
+    // conferencia antes de pedir: existe mesmo e e de pedestre? Criar um
+    // char com modelo que nao e de gente e pedido de crash.
     IF GET_MODEL_DOESNT_EXIST_IN_RANGE pedModel pedModel tmpInt
         RETURN
     ENDIF
-    IF NOT IS_MODEL_IN_CDIMAGE CFG_BOX_MODEL
+    GET_MODEL_TYPE pedModel tmpInt
+    IF NOT tmpInt = MODEL_TYPE_PED
         RETURN
     ENDIF
+    // A caixa: pega o objeto escolhido no ini, ja conferido (bbg_box_model).
+    // Se o arquivo dele nao estiver no jogo, cai no padrao: melhor um NPC com
+    // a caixa original do que NPC nenhum.
+    GOSUB bbg_box_model
+    IF NOT IS_MODEL_IN_CDIMAGE nextAudioTick
+        nextAudioTick = CFG_BOX_MODEL
+        IF NOT IS_MODEL_IN_CDIMAGE nextAudioTick
+            RETURN
+        ENDIF
+    ENDIF
     REQUEST_MODEL pedModel
-    REQUEST_MODEL CFG_BOX_MODEL
+    REQUEST_MODEL nextAudioTick
     GET_GAME_TIMER loadTick
     nextAudioTick = 0
     gstate = 1
@@ -278,8 +302,10 @@ bbg_wait_models:
         gstate = 0
         RETURN
     ENDIF
+    // modelo da caixa (lido do ini e conferido agora de novo, por seguranca)
+    GOSUB bbg_box_model
     IF HAS_MODEL_LOADED pedModel
-    AND HAS_MODEL_LOADED CFG_BOX_MODEL
+    AND HAS_MODEL_LOADED nextAudioTick
         // checagem de colisao: nao cria o NPC antes do mundo estar pronto
         IF IS_CHAR_WAITING_FOR_WORLD_COLLISION playerChar
             RETURN
@@ -341,7 +367,8 @@ bbg_make_box:
     IF NOT DOES_CHAR_EXIST pedBox
         RETURN
     ENDIF
-    CREATE_RENDER_OBJECT_TO_CHAR_BONE pedBox CFG_BOX_MODEL CFG_BOX_BONE boxOX boxOY boxOZ boxRX boxRY boxRZ objBox
+    GOSUB bbg_box_model              // nextAudioTick = objeto escolhido no ini
+    CREATE_RENDER_OBJECT_TO_CHAR_BONE pedBox nextAudioTick CFG_BOX_BONE boxOX boxOY boxOZ boxRX boxRY boxRZ objBox
     IF NOT objBox = 0
         SET_RENDER_OBJECT_SCALE objBox CFG_BOX_SCALE CFG_BOX_SCALE CFG_BOX_SCALE
     ENDIF
@@ -883,6 +910,8 @@ bbg_ini_load:
         boxRY = CFG_BOX_ROT_Y
         boxRZ = CFG_BOX_ROT_Z
         pedModel = CFG_PED_MODEL          // reserva, caso o ini nao tenha "model="
+        tmpInt = 0
+        SET_CLEO_SHARED_VAR CFG_VAR_BOX tmpInt   // idem para a caixa
     ELSE
         dx = CFG_VOLUME
     ENDIF
@@ -915,24 +944,8 @@ bbg_ini_load:
         ENDIF
     ENDWHILE
     CLOSE_FILE tmpInt
-    // -----------------------------------------------------------------------
-    //  Valida o modelo do ped: se nao for um ID de pedestre que existe mesmo,
-    //  volta para o padrao do script. Assim um nome errado no ini nunca vira
-    //  um ped invalido (nem crash) - so um NPC com a skin padrao.
-    // -----------------------------------------------------------------------
-    IF flag = 0
-        IF pedModel < 0
-            pedModel = CFG_PED_MODEL
-        ELSE
-            IF pedModel > CFG_PED_MAX_ID
-                pedModel = CFG_PED_MODEL
-            ELSE
-                IF GET_MODEL_DOESNT_EXIST_IN_RANGE pedModel pedModel loadTick
-                    pedModel = CFG_PED_MODEL
-                ENDIF
-            ENDIF
-        ENDIF
-    ENDIF
+    // (o modelo do ped e o da caixa ja foram conferidos linha por linha:
+    //  veja bbg_ini_line e bbg_box_model)
     RETURN
 
     // -----------------------------------------------------------------------
@@ -950,14 +963,18 @@ bbg_ini_line:
     SCAN_STRING $bufPath " %*[rR]otZ%*[^-.0-9]%f" dt boxRZ
 
     // -----------------------------------------------------------------------
-    //  [Ped] model= <nome do DFF ou ID>
-    //     "model=male01"  -> procura a skin pelo nome (via CLEO+, cobre mods)
-    //     "model=7"       -> usa o ID direto
+    //  model= <nome do DFF ou ID numerico>
+    //     Em [Ped] escolhe a skin do NPC, em [Caixa] o objeto da caixa. Quem
+    //     decide qual e qual e o TIPO do modelo (0E7F): pedestre vira NPC, o
+    //     resto vira objeto na mao dele. Assim a linha funciona em qualquer
+    //     secao e um modelo de pedestre nunca vai parar na caixa (nem um
+    //     objeto no lugar do NPC).
     //  Como funciona: o "%n" do scanner devolve em que caractere o valor
     //  comeca. Se o valor comeca com digito, e ID; se nao, cortamos a string
-    //  no fim do nome (tirando o fim de linha, espacos e comentario) e
-    //  entregamos o nome para o jogo procurar.
-    //  Qualquer coisa estranha e ignorada: o modelo segue o padrao.
+    //  no fim do nome (tirando fim de linha, espacos e comentario), deixamos
+    //  em minusculas (o nome no jogo e minusculo) e entregamos para o jogo
+    //  procurar (0E9C, que cobre modelo de mod/ModLoader).
+    //  Qualquer coisa estranha e ignorada: o que estava antes continua valendo.
     // -----------------------------------------------------------------------
     loadTick = 0
     SCAN_STRING $bufPath " %*[mM]odel%*[^A-Za-z0-9_]%n%c" dt nextAudioTick loadTick
@@ -967,14 +984,30 @@ bbg_ini_line:
         AND loadTick < 58
             // ---- ID numerico ----
             SCAN_STRING $bufPath " %*[mM]odel%*[^0-9-]%d" dt loadTick
-            pedModel = loadTick
         ELSE
             // ---- nome do DFF ----
+            loadTick = -1                            // -1 = nao achou nada
+            tmpInt = 0                               // (se o scan falhar, nao mexe)
             SCAN_STRING $bufPath " %*[mM]odel%*[^A-Za-z0-9_]%*[A-Za-z0-9_]%n" dt tmpInt
-            tmpInt = bufPath + tmpInt                // fim do nome
-            WRITE_MEMORY tmpInt 1 0 0
-            IF GET_MODEL_BY_NAME $nextAudioTick loadTick
-                pedModel = loadTick
+            IF tmpInt > 0
+                tmpInt = bufPath + tmpInt            // fim do nome
+                WRITE_MEMORY tmpInt 1 0 0            // fecha a string aqui
+                SET_STRING_LOWER nextAudioTick       // low_hi_fi_3, male01...
+                IF GET_MODEL_BY_NAME $nextAudioTick tmpInt
+                    loadTick = tmpInt
+                ENDIF
+            ENDIF
+        ENDIF
+        // ---- existe? e de que tipo? ----
+        IF loadTick > -1
+            GET_MODEL_TYPE loadTick tmpInt
+            IF tmpInt = MODEL_TYPE_PED
+                pedModel = loadTick                  // pedestre: e o NPC
+            ELSE
+                IF tmpInt > MODEL_TYPE_INVALID
+                AND NOT tmpInt = MODEL_TYPE_VEHICLE
+                    SET_CLEO_SHARED_VAR CFG_VAR_BOX loadTick   // o resto: caixa
+                ENDIF
             ENDIF
         ENDIF
     ENDIF
@@ -998,10 +1031,12 @@ bbg_ini_write:
         WRITE_FORMATTED_STRING_TO_FILE tmpInt "; 90s Boombox Guy - configuracao%c" 10
         WRITE_FORMATTED_STRING_TO_FILE tmpInt "; Use ponto decimal (0.5), nao virgula. Nao mude o nome das chaves.%c" 10
         WRITE_FORMATTED_STRING_TO_FILE tmpInt "; Comentario comeca com ; ou #.%c" 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "; As linhas model= podem ser o nome do DFF (sem .dff) ou o ID;%c" 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "; quem decide o que e skin de NPC e o que e objeto e o tipo do modelo.%c" 10
         WRITE_FORMATTED_STRING_TO_FILE tmpInt "[Ped]%c" 10
-        WRITE_FORMATTED_STRING_TO_FILE tmpInt "; aparencia do NPC: nome do DFF (sem .dff, ex.: male01, wmybu, bmycr)%c" 10
-        WRITE_FORMATTED_STRING_TO_FILE tmpInt "; ou o ID numerico do modelo (ex.: 7). Se o nome nao existir, o%c" 10
-        WRITE_FORMATTED_STRING_TO_FILE tmpInt "; script usa o modelo padrao dele.%c" 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "; aparencia do NPC: nome do DFF de um PEDESTRE (ex.: male01, wmybu,%c" 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "; bmycr) ou o ID (ex.: 7). Serve skin vanilla ou de mod (ModLoader%c" 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "; incluido). Se o nome nao existir, o NPC usa o modelo padrao.%c" 10
         GET_MODEL_NAME_POINTER pedModel dt
         IF dt = 0
             WRITE_FORMATTED_STRING_TO_FILE tmpInt "model=%d%c" pedModel 10
@@ -1009,6 +1044,16 @@ bbg_ini_write:
             WRITE_FORMATTED_STRING_TO_FILE tmpInt "model=%s%c" $dt 10
         ENDIF
         WRITE_FORMATTED_STRING_TO_FILE tmpInt "[Caixa]%c" 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "; objeto da caixa: nome do DFF de um OBJETO (ex.: low_hi_fi_3)%c" 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "; ou o ID (ex.: 2226). Qualquer objeto do jogo serve. Se o nome nao%c" 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "; existir (ou o modelo nao for um objeto), a caixa usa o padrao.%c" 10
+        GOSUB bbg_box_model
+        GET_MODEL_NAME_POINTER nextAudioTick dt
+        IF dt = 0
+            WRITE_FORMATTED_STRING_TO_FILE tmpInt "model=%d%c" nextAudioTick 10
+        ELSE
+            WRITE_FORMATTED_STRING_TO_FILE tmpInt "model=%s%c" $dt 10
+        ENDIF
         WRITE_FORMATTED_STRING_TO_FILE tmpInt "posX=%g%c" boxOX 10
         WRITE_FORMATTED_STRING_TO_FILE tmpInt "posY=%g%c" boxOY 10
         WRITE_FORMATTED_STRING_TO_FILE tmpInt "posZ=%g%c" boxOZ 10
@@ -1075,7 +1120,34 @@ bbg_release_models:
     // pedido e liberado sempre em par (mesmo se NPC e caixa forem o mesmo
     // modelo, a contagem continua certa)
     MARK_MODEL_AS_NO_LONGER_NEEDED pedModel
-    MARK_MODEL_AS_NO_LONGER_NEEDED CFG_BOX_MODEL
+    GOSUB bbg_box_model
+    MARK_MODEL_AS_NO_LONGER_NEEDED nextAudioTick
+    RETURN
+
+    // -----------------------------------------------------------------------
+    //  Modelo efetivo da caixa, ja conferido: devolve em 'nextAudioTick'.
+    //  Le o que o jogador escolheu no ini (guardado em CFG_VAR_BOX), pergunta
+    //  ao jogo que tipo de modelo e (0E7F) e SO aceita os tipos que sao
+    //  objeto de verdade: atomico puro (1), com hora do dia (3), clump (5,
+    //  objeto de varios pedacos) e LOD (8). Pedestre e veiculo ficam de fora:
+    //  o comando que monta a caixa nao checa o modelo, e criar um carro ou
+    //  uma pessoa "como objeto" derruba o jogo.
+    //  Valor vazio, apagado por outro script, nome errado, modelo de ped:
+    //  cai em CFG_BOX_MODEL (2226), sem avisar ninguem.
+    //  Rascunho: 'tries' e 'dt' (livres em todos os pontos de chamada).
+    // -----------------------------------------------------------------------
+bbg_box_model:
+    GET_CLEO_SHARED_VAR CFG_VAR_BOX tries
+    nextAudioTick = CFG_BOX_MODEL
+    IF tries > 0
+        GET_MODEL_TYPE tries dt
+        IF dt = MODEL_TYPE_ATOMIC
+        OR dt = MODEL_TYPE_TIMED
+        OR dt = MODEL_TYPE_CLUMP
+        OR dt = MODEL_TYPE_LODATOMIC
+            nextAudioTick = tries
+        ENDIF
+    ENDIF
     RETURN
 }
 SCRIPT_END

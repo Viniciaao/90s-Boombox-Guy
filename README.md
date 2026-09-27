@@ -7,8 +7,9 @@ A diferença de conceito: em vez de o CJ carregar a caixa de som, um **NPC
 civil** (o "cara do som") é chamado por cheat, **aparece longe de você**
 (de preferência atrás, fora da câmera), **vem correndo** até o player
 carregando a caixa de som nas mãos e passa a te acompanhar com a música
-saindo da caixa em **áudio 3D**. A aparência do NPC é escolhida no
-`BoomboxGuy.ini` — pelo **nome do DFF** ou pelo ID do modelo.
+saindo da caixa em **áudio 3D**. A aparência do NPC **e o objeto da caixa**
+são escolhidos no `BoomboxGuy.ini` — pelo **nome do DFF** ou pelo ID do
+modelo.
 
 ---
 
@@ -90,8 +91,11 @@ conseguir abrir. Se nenhum arquivo for encontrado, o script mostra o aviso
 "nenhuma musica encontrada" e tenta de novo mais tarde (você pode até
 colocar os arquivos com o jogo aberto, sem sair do jogo).
 
-Não é necessário nenhum arquivo DFF/TXD: a caixa de som é o **objeto nativo
-do jogo** `2226 (low_hi_fi_3)`.
+Não é necessário nenhum arquivo DFF/TXD: por padrão a caixa de som é o
+**objeto nativo do jogo** `2226 (low_hi_fi_3)`. Se quiser outra caixa, é só
+apontar `[Caixa] model=` para o **nome do DFF** de qualquer objeto que já
+esteja no seu jogo (vanilla ou de mod) — nada de `.dff`/`.txd` solto na
+pasta do CLEO.
 
 Na primeira vez que o jogo abre, o script cria também o
 `CLEO/BoomboxGuy/BoomboxGuy.ini` (modelo do NPC, posição/rotação da caixa e
@@ -101,8 +105,9 @@ pronta em `BoomboxGuy/BoomboxGuy.ini` no repositório.
 Um detalhe: o script **não** usa o plugin `IniFiles.cleo`, e sim os comandos
 de arquivo do próprio CLEO 4 (`0A9A/0AD4/0AD7/0AD9/0A9B`) — então o `.ini`
 funciona em qualquer instalação de CLEO 4, sem plugin extra. Já a **busca do
-modelo pelo nome** usa o opcode `0E9C` do CLEO+, que existe a partir da v1.2
-(a mesma versão que o script já exige na checagem de dependência).
+modelo pelo nome** usa o opcode `0E9C`, e a checagem de tipo (`0E7F`) vem
+do mesmo CLEO+ — os dois existem a partir da v1.2, a mesma versão que o
+script já exige na checagem de dependência.
 
 ---
 
@@ -114,13 +119,13 @@ com `./build.sh` (ou `make`).
 
 | Constante | Padrão | Para que serve |
 | --- | --- | --- |
-| `CFG_PED_MODEL` | `7` (male01) | Modelo **padrão** do NPC — só é usado se o `.ini` não tiver um `model=` válido |
-| `CFG_BOX_MODEL` | `2226` | Objeto da caixa de som |
+| `CFG_PED_MODEL` | `7` (male01) | Skin **padrão** do NPC — só é usada se o `.ini` não tiver um `model=` válido |
+| `CFG_BOX_MODEL` | `2226` (low_hi_fi_3) | **Objeto padrão** da caixa de som (idem: reserva do `.ini`) |
+| `CFG_VAR_BOX` | `1023` | Onde fica guardado, entre um quadro e outro, o objeto da caixa escolhido no `.ini` (uma "var compartilhada" do CLEO — as 32 `LVAR` do script estão todas em uso) |
 | `CFG_BOX_BONE` | `24` (`BONE_R_HAND`) | Osso onde a caixa é presa |
 | `CFG_BOX_OFF_X/Y/Z` | `0.40 / 0.02 / 0.02` | Posição da caixa na mão (**padrão do .ini**) |
 | `CFG_BOX_ROT_X/Y/Z` | `0 / -90 / 0` | Rotação da caixa (**padrão do .ini**) |
 | `CFG_BOX_SCALE` | `1.0` | Tamanho da caixa (`0.7` deixa a caixa menor) |
-| `CFG_PED_MAX_ID` | `400` | Faixa de IDs aceita como pedestre (proteção contra ID errado) |
 | `CFG_INI_MAX_LINES` | `200` | Trava de segurança na leitura do `.ini` |
 | `CFG_TUNE_POS` / `CFG_TUNE_ROT` | `0.02` / `5.0` | Tamanho do passo no modo `BBGUYTUNE` |
 | `CFG_TUNE_KEY` | `46` (Delete) | Tecla que grava o ajuste da caixa em arquivo |
@@ -154,12 +159,18 @@ primeira vez que o jogo abre:
 ; 90s Boombox Guy - configuracao
 ; Use ponto decimal (0.5), nao virgula. Nao mude o nome das chaves.
 ; Comentario comeca com ; ou #.
+; As linhas model= podem ser o nome do DFF (sem .dff) ou o ID;
+; quem decide o que e skin de NPC e o que e objeto e o tipo do modelo.
 [Ped]
-; aparencia do NPC: nome do DFF (sem .dff, ex.: male01, wmybu, bmycr)
-; ou o ID numerico do modelo (ex.: 7). Se o nome nao existir, o
-; script usa o modelo padrao dele.
+; aparencia do NPC: nome do DFF de um PEDESTRE (ex.: male01, wmybu,
+; bmycr) ou o ID (ex.: 7). Serve skin vanilla ou de mod (ModLoader
+; incluido). Se o nome nao existir, o NPC usa o modelo padrao.
 model=male01
 [Caixa]
+; objeto da caixa: nome do DFF de um OBJETO (ex.: low_hi_fi_3)
+; ou o ID (ex.: 2226). Qualquer objeto do jogo serve. Se o nome nao
+; existir (ou o modelo nao for um objeto), a caixa usa o padrao.
+model=low_hi_fi_3
 posX=0.40
 posY=0.02
 posZ=0.02
@@ -173,15 +184,23 @@ volume=1
 
 Como funciona:
 
-- **`[Ped] model`** — a skin do NPC. Aceita o **nome do DFF** (sem `.dff`:
-  `male01`, `wmybu`, `bmycr`…) **ou o ID numérico** (`7`). A busca pelo nome
-  é feita pelo próprio jogo (via CLEO+), então funciona com **qualquer
-  skin** — vanilla ou de mod, inclusive as instaladas por ModLoader/IMG —
-  e não liga para maiúsculas/minúsculas (`Model=MALE01` funciona).
-  Se o nome não existir (typo, mod removido), o NPC simplesmente usa o
-  modelo padrão do script, **sem aviso e sem erro**.
-- **`[Caixa]`** — onde a caixa fica presa na mão do NPC. O deslocamento usa
-  os eixos **do osso da mão** (não são os eixos do mundo, por isso os números
+- **`model` (nos dois lugares)** — aceita o **nome do DFF** (sem `.dff`:
+  `male01`, `low_hi_fi_3`, `wmybu`…) **ou o ID numérico** (`7`, `2226`). A
+  busca pelo nome é feita pelo próprio jogo (via CLEO+), então funciona com
+  **qualquer modelo** — vanilla ou de mod, inclusive os instalados por
+  ModLoader/IMG — e não liga para maiúsculas/minúsculas (`Model=MALE01`
+  funciona).
+- **`[Ped] model`** — a **skin do NPC**. Só vale para modelos de
+  **pedestre**: se o nome apontar para um objeto, o NPC continua com o
+  modelo padrão. Se o nome não existir (typo, mod removido), o NPC
+  simplesmente usa `CFG_PED_MODEL`, **sem aviso e sem erro**.
+- **`[Caixa] model`** — o **objeto da caixa de som**. Aqui é o contrário:
+  só vale para **objeto** (aceita os tipos de objeto do jogo: atômico,
+  clump, com hora do dia e LOD), nunca pedestre nem veículo. Se o nome não existir, for um ped ou
+  um carro, ou o arquivo do modelo não estiver no jogo, a caixa volta para
+  `CFG_BOX_MODEL` (o `low_hi_fi_3` original), **sem aviso e sem erro**.
+- **`[Caixa] posX/posY/posZ` e `rotX/rotY/rotZ`** — onde a caixa fica presa
+  na mão do NPC. O deslocamento usa os eixos **do osso da mão** (não são os eixos do mundo, por isso os números
   parecem estranhos e a rotação em Y é `-90`). Os valores acima já são um
   encaixe testado no jogo.
 - **`[Som] volume`** — de `0.0` (mudo) a `1.0` (volume máximo). É lido a cada
@@ -190,6 +209,9 @@ Como funciona:
   relido a cada chamada — nem precisa reiniciar o jogo). Passo a passo:
   abra `CLEO/BoomboxGuy/BoomboxGuy.ini` num editor de texto simples, mude o
   que quiser, salve, e digite `BOOBOX` no jogo.
+- Quem decide o que é skin de NPC e o que é objeto da caixa é o **tipo** do
+  modelo, não a seção: `model=` funciona em qualquer lugar do arquivo. Em
+  `[Ped]` use um pedestre; em `[Caixa]` use um objeto.
 - Valores inválidos, chaves escritas errado, linhas em branco e comentários
   (linhas começando com `;` ou `#`) são simplesmente ignorados: a chave que
   não for encontrada continua com o valor padrão, **nunca dá erro nem
@@ -309,9 +331,14 @@ bagunçadas):
 - **Cutscenes**: durante `IS_ON_CUTSCENE` ou `IS_ON_SCRIPTED_CUTSCENE` a
   música é pausada (`0AAD` ação 2) e retomada de onde parou (ação 3) no
   fim, e o script evita mexer no NPC no meio da cena.
-- **Nada de variáveis globais do jogo.** Só `LVAR_*` locais do script
-  (32 locais, exatamente o limite de 32 do CLEO — por isso o script evita
-  variáveis "de enfeite").
+- **Nada de variáveis globais do jogo.** O trabalho é todo feito com as
+  `LVAR_*` locais do script — 32, exatamente o limite do CLEO (por isso o
+  script evita variáveis "de enfeite"). O único valor que precisa sobreviver
+  de um quadro para o outro além delas, o **objeto da caixa escolhido no
+  `.ini`**, mora numa *var compartilhada do CLEO* (`0AB3`/`0AB4`, índice
+  `CFG_VAR_BOX`): são 1024 espaços numerados do próprio CLEO, não são
+  variáveis do savegame do jogo, e o valor é conferido de novo toda vez que
+  é usado — se outro script escrever por cima, a caixa só volta ao padrão.
 - **Modelos**: os dois modelos (NPC e caixa) são pedidos com `REQUEST_MODEL`
   e só depois de `HAS_MODEL_LOADED` o ped é criado; se estourar o timeout,
   o script volta ao estado inicial em silêncio. Os modelos são liberados com
@@ -334,11 +361,16 @@ bagunçadas):
   `DELETE_RENDER_OBJECT` depois que o NPC morre — seria ponteiro inválido).
 - **Handle do ped**: todo acesso ao NPC é precedido de `DOES_CHAR_EXIST` e
   `IS_CHAR_DEAD`. O script nunca mexe em um handle morto.
-- **Modelo vindo do `.ini`**: antes de usar, o script confere que o ID está
-  na faixa de pedestres (0..399) e que o modelo existe de verdade no jogo
-  (opcode do CLEO+). Nome não encontrado, ID de veículo/objeto ou valor
-  maluco ⇒ volta para o modelo padrão em silêncio — nunca cria um ped
-  inválido.
+- **Modelo vindo do `.ini`**: o nome é resolvido pelo próprio jogo
+  (`0E9C`) e o resultado passa por três checagens antes de virar coisa na
+  tela — (1) existe mesmo e não é slot vazio, (2) é do **tipo** certo para o
+  lugar, (3) o arquivo do modelo está no jogo (`IS_MODEL_IN_CDIMAGE`).
+  Para o NPC o tipo tem que ser **pedestre**; para a caixa, um dos tipos de
+  **objeto** (atômico, com hora do dia, clump ou LOD). Pedestre e veículo
+  são recusados na caixa de propósito: o comando que monta o objeto na mão
+  não confere o modelo, e tratar um carro ou uma pessoa como objeto
+  derrubaria o jogo. Nome não encontrado, tipo errado ou valor maluco ⇒
+  volta para o padrão em silêncio.
 - O loop principal tem `WAIT 0`, e o script volta ao estado inicial se o
   player morrer, se o char sumir do pool, se o NPC morrer ou se for
   dispensado.
@@ -350,6 +382,14 @@ bagunçadas):
 
 ## Histórico de versões
 
+- **v6** — escolha do **objeto da caixa** pelo `.ini`: `[Caixa] model=` aceita
+  o **nome do DFF** (resolvido pelo jogo com `0E9C`) ou o ID, e o modelo é
+  validado pelo **tipo** com o opcode `0E7F` — só entra objeto (atômico,
+  clump, LOD); pedestre, veículo ou nome inexistente caem no `low_hi_fi_3`
+  padrão sem avisar. O mesmo `model=` em `[Ped]` ganhou a checagem de tipo
+  (tem que ser pedestre). O valor escolhido é guardado numa var
+  compartilhada do CLEO (`0AB3`/`0AB4`), já que as 32 `LVAR` do script estão
+  em uso; o `.ini` é reescrito com o nome real do objeto (`0F17`).
 - **v5** — escolha da skin do NPC pelo `.ini`: `[Ped] model=` aceita o **nome
   do DFF** (resolvido pelo próprio jogo com o opcode `0E9C` do CLEO+, então
   vale para skins de mod, inclusive via ModLoader) ou o ID numérico; modelo
