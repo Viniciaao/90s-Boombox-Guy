@@ -1,0 +1,22 @@
+Coloque aqui as musicas do Boombox Guy:
+
+    som1.mp3
+    som2.mp3
+    ...
+    som10.mp3
+
+Sao 10 faixas (nomes fixos, exatamente como no mod original). O script sorteia
+uma a cada vez que a musica termina.
+
+No jogo, a estrutura final fica:
+
+    GTA San Andreas/
+      CLEO/
+        BoomboxGuy.cs      <- o script compilado
+        BoomboxGuy/        <- esta pasta com os MP3
+          som1.mp3
+          ...
+          som10.mp3
+
+Formatos aceitos: MP3 (recomendado), OGG, WAV, AIFF - o que o BASS do CLEO
+conseguir abrir. Se nenhum arquivo for encontrado, o script avisa na tela.
