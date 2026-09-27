@@ -1,23 +1,43 @@
-# 90s Boombox Guy
+<div align="center">
 
-Remake do clássico **90s Boombox** (de *Guidopdu*), reescrito de zero em
-**gta3script + CLEO+**.
+# 🎧 90s Boombox Guy
 
-A diferença de conceito: em vez de o CJ carregar a caixa de som, um **NPC
-civil** (o "cara do som") é chamado por cheat, **aparece longe de você**
-(de preferência atrás, fora da câmera), **vem correndo** até o player
-carregando a caixa de som nas mãos e passa a te acompanhar com a música
-saindo da caixa em **áudio 3D**. A aparência do NPC **e o objeto da caixa**
-são escolhidos no `BoomboxGuy.ini` — pelo **nome do DFF** ou pelo ID do
-modelo.
+### Remake do clássico *90s Boombox* (Guidopdu), reescrito do zero em gta3script + CLEO+
+
+<img alt="GTA San Andreas 1.0 US" src="https://img.shields.io/badge/GTA_San_Andreas-1.0_US-2f2f2f?style=for-the-badge">
+<img alt="Requer CLEO 4 + CLEO+ v1.2+" src="https://img.shields.io/badge/requer-CLEO_4_%2B_CLEO%2B_v1.2+-blue?style=for-the-badge">
+<img alt="Feito com gta3script" src="https://img.shields.io/badge/feito_com-gta3script-orange?style=for-the-badge">
+<img alt="Versão v6.5" src="https://img.shields.io/badge/vers%C3%A3o-v6.5-success?style=for-the-badge">
+
+**Um NPC "cara do som" aparece longe de você, vem correndo com a caixa de som<br>
+e passa a te acompanhar com música em áudio 3D — na rua, no interior<br>
+e até na garupa da moto.**
+
+</div>
 
 ---
 
-## Como usar
+## 📑 Índice
+
+- [🎮 Como usar](#-como-usar)
+- [🚀 Instalação](#-instalação)
+- [🎵 Músicas](#-músicas)
+- [⚙️ Configuração](#-configuração)
+- [🎛️ Ajuste ao vivo da caixa (`BBGUYTUNE`)](#-ajustando-a-caixa-ao-vivo-cheat-bbguyttune)
+- [❓ Problemas comuns](#-problemas-comuns)
+- [📦 Estrutura do repositório](#-estrutura-do-repositório)
+- [🔧 Compilando](#-compilando)
+- [🧠 Como foi feito / notas de segurança](#-como-foi-feito--notas-de-segurança)
+- [📜 Histórico de versões](#-histórico-de-versões)
+- [🙏 Créditos](#-créditos)
+
+---
+
+## 🎮 Como usar
 
 | Cheat | O que faz |
 | --- | --- |
-| `BOOBOX` | Chama o carregador de caixa de som |
+| `BOOBOX` | Chama o NPC (o cara da caixa de som) |
 | `BOOBOXD` | Dispensa o NPC e desliga a música |
 | `BBGUYTUNE` | (opcional) liga/desliga o modo de ajuste da caixa na mão |
 
@@ -83,7 +103,7 @@ dispensar, morrer: nada disso mostra texto.
 
 ---
 
-## Instalação
+## 🚀 Instalação
 
 1. Tenha o **CLEO 4** e o **CLEO+** instalados. O script usa opcodes CLEO+
    (caixa na mão, áudio 3D, detecção de cutscene, leitura do estado do NPC).
@@ -95,24 +115,15 @@ dispensar, morrer: nada disso mostra texto.
 ```
 GTA San Andreas/
   CLEO/
-    BoomboxGuy.cs
+    BoomboxGuy.cs            <- o mod
     BoomboxGuy/
+      LEIA-ME.txt            <- instruções (vão junto)
+      BoomboxGuy.ini         <- configuração (o script cria sozinho)
       som1.mp3
       som2.mp3
       ...
       som50.mp3
 ```
-
-**Quantidade de músicas: de 1 até 50.** O script **varre a pasta e conta
-quais arquivos existem** (`som1.mp3` … `som50.mp3`) na primeira vez que você
-chama o NPC e usa só as que estão lá — funciona com 1, 2, 10 ou 50 músicas,
-e até com numeração "esburacada" (por exemplo só `som1`, `som4` e `som9`).
-Arquivos que faltarem são simplesmente ignorados.
-
-Formatos: MP3 (recomendado), OGG, WAV, AIFF — o que o BASS do CLEO
-conseguir abrir. Se nenhum arquivo for encontrado, o script mostra o aviso
-"nenhuma musica encontrada" e tenta de novo mais tarde (você pode até
-colocar os arquivos com o jogo aberto, sem sair do jogo).
 
 Não é necessário nenhum arquivo DFF/TXD: por padrão a caixa de som é o
 **objeto nativo do jogo** `2226 (low_hi_fi_3)`. Se quiser outra caixa, é só
@@ -134,7 +145,28 @@ script já exige na checagem de dependência.
 
 ---
 
-## Configuração
+## 🎵 Músicas
+
+Nome dos arquivos: `som1.mp3`, `som2.mp3` … `som50.mp3` (não precisa ser MP3:
+valem OGG, WAV e AIFF também — o que o BASS do CLEO abrir).
+
+- **Quantidade: de 1 até 50.** O script **varre a pasta e conta quais
+  arquivos existem** na primeira vez que você chama o NPC e usa só os que
+  estão lá — funciona com 1, 2, 10 ou 50 músicas, e até com numeração
+  "esburacada" (por exemplo só `som1`, `som4` e `som9`). Arquivos que
+  faltarem são simplesmente ignorados.
+- **A ordem é sempre aleatória**, nunca sequencial, e ele **não repete a
+  mesma faixa duas vezes seguidas**. Quando a música acaba, ele sorteia
+  outra sozinho.
+- Dá para **colocar/tirar arquivos com o jogo aberto**: não precisa
+  reiniciar o jogo.
+- Se nenhum arquivo for encontrado, aparece na tela "nenhuma musica
+  encontrada" — um dos **dois únicos avisos** do mod (o outro é o de CLEO+
+  faltando).
+
+---
+
+## ⚙️ Configuração
 
 Todo o "painel de controle" fica no topo de `BoomboxGuy.sc`, em constantes
 fáceis de achar (`CONST_INT` / `CONST_FLOAT`). Depois de mudar, recompile
@@ -175,7 +207,7 @@ com `./build.sh` (ou `make`).
 | `CFG_LOAD_MS` | `10000` | Timeout ao carregar modelos/mundo |
 | `CFG_AUDIO_RETRY_MS` | `20000` | Espera entre tentativas se nenhum MP3 abrir |
 
-### Arquivo de configuração: `CLEO/BoomboxGuy/BoomboxGuy.ini`
+### 📄 Arquivo de configuração: `CLEO/BoomboxGuy/BoomboxGuy.ini`
 
 **Aparência do NPC, posição/rotação da caixa e volume** moram num arquivo
 `.ini`, que o próprio script **cria sozinho** (já com os valores padrão) na
@@ -246,7 +278,7 @@ Como funciona:
 - Para voltar tudo ao padrão, é só apagar o arquivo: o script cria outro na
   próxima vez que abrir o jogo (com `model=male01`).
 
-### Ajustando a caixa ao vivo (cheat `BBGUYTUNE`)
+### 🎛️ Ajustando a caixa ao vivo (cheat `BBGUYTUNE`)
 
 Se quiser achar os números da caixa sem ficar editando e recarregando:
 
@@ -273,7 +305,7 @@ nada de `F5`/`F-keys`, que em muitos teclados de notebook estão quebradas.
 
 ---
 
-## Compilando
+## 🔧 Compilando
 
 O script é escrito em **gta3script** e compilado com o
 [gta3sc](https://github.com/thelink2012/gta3sc):
@@ -308,19 +340,38 @@ gta3sc --config=gtasa --guesser --cs -fcleo -fno-entity-tracking \
 
 ---
 
-## Estrutura do repositório
+## ❓ Problemas comuns
+
+| Sintoma | O que fazer |
+| --- | --- |
+| "Cleo+ não encontrado" / "CLEO+ desatualizado" | O `CLEO+.cleo` não está na pasta `CLEO/` ou é mais velho que a **v1.2**. Instale/atualize e entre no jogo de novo. |
+| "Nenhuma musica encontrada" | Não existe nenhum `som*.mp3` em `CLEO/BoomboxGuy/`. Confira o nome dos arquivos. |
+| Digito `BOOBOX` e nada acontece | O `BoomboxGuy.cs` está em `CLEO/`? O jogo tem CLEO 4? (Se o CLEO+ faltar, o aviso aparece na tela.) |
+| A skin do NPC não mudou | O `BOOBOX` relê o `.ini`: confira o nome do DFF (sem `.dff`) e se o modelo é um **pedestre**. Nome errado cai no `male01` sem avisar. |
+| A caixa está torta ou fora da mão | Use o modo `BBGUYTUNE` (seção acima) e salve com `DELETE`. |
+| A música não toca | Veja o `volume=` no `[Som]` do `.ini` (`0.0` = mudo) e teste outro arquivo. O som sai **da caixa**, em 3D: de longe ele é abafado de propósito. |
+| O NPC ficou para trás | Fugiu de carro/avião sem lugar para ele? Ele volta quando você descer e **pisar no chão**. Travou num canto? O script resolve sozinho em alguns segundos (linha reta e, em último caso, reaparecendo perto). |
+
+Tudo isso também está no **`LEIA-ME.txt`** que vai junto com o mod, dentro de
+`CLEO/BoomboxGuy/` (pronto para consultar sem sair do jogo).
+
+---
+
+## 📦 Estrutura do repositório
 
 ```
-BoomboxGuy.sc          fonte (gta3script) — é aqui que você mexe
-BoomboxGuy.cs          compilado (vai para CLEO/)
-build.sh / Makefile    builds
-tools/cleo-plus.xml    opcodes do CLEO+ para o gta3sc (MIT, Junior_Djjr)
-BoomboxGuy/            pasta-exemplo para os MP3 (som1.mp3 ... som50.mp3)
+BoomboxGuy.sc            fonte (gta3script) — é aqui que você mexe
+BoomboxGuy.cs            compilado (vai para CLEO/)
+build.sh / Makefile      builds
+tools/cleo-plus.xml      opcodes do CLEO+ para o gta3sc (MIT, Junior_Djjr)
+BoomboxGuy/BoomboxGuy.ini  cópia de exemplo do arquivo de configuração
+BoomboxGuy/LEIA-ME.txt     instruções que vão junto com o mod (em texto puro)
+README.md                este arquivo
 ```
 
 ---
 
-## Como foi feito / notas de segurança
+## 🧠 Como foi feito / notas de segurança
 
 O script foi escrito pensando em **não crashar**, que era o problema do mod
 original (que chegou a ter correções por causa de variáveis globais
@@ -469,7 +520,7 @@ bagunçadas):
 
 ---
 
-## Histórico de versões
+## 📜 Histórico de versões
 
 - **v6.5** — ele nunca mais fica plantado:
   - **"Saiu do interior e não segue mais"**: o resgate de quem ficava para
@@ -590,7 +641,7 @@ bagunçadas):
 
 ---
 
-## Créditos
+## 🙏 Créditos
 
 - Mod original: **90s Boombox** por *Guidopdu*
   ([MixMods](https://www.mixmods.com.br/2016/02/90s-boombox-andar-ouvindo-radio/))

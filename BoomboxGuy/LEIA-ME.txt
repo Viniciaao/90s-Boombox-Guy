@@ -1,33 +1,121 @@
-Coloque aqui as musicas do Boombox Guy:
+==========================================================================
+                            90s BOOMBOX GUY
+                   remake do "90s Boombox" (Guidopdu)
+                      GTA San Andreas + CLEO 4 + CLEO+
+==========================================================================
 
-    som1.mp3
-    som2.mp3
-    ...
-    som50.mp3
+O QUE E
+-------
+Em vez de o CJ carregar a caixa de som, um NPC civil (o "cara do som") e
+chamado por cheat, aparece LONGE de voce (de preferencia atras, fora do
+campo de visao da camera), desce correndo ate o player carregando a caixa
+de som e passa a te acompanhar com a musica saindo dela em AUDIO 3D.
 
-Voce pode usar de 1 ate 50 musicas. O script confere quais arquivos existem
-e usa so os que estao na pasta (cheat BOOBOX). Arquivos que faltarem sao
-simplesmente ignorados - pode ter so a som1.mp3, ou som1/som4/som9, que
-funciona do mesmo jeito.
+Ele entra com voce nos interiores (aparece na hora, logo a frente do CJ) e
+sobe junto no seu veiculo - inclusive na garupa da moto. Andando, ele para
+a 2,5 m de voce (nunca entra no seu corpo nem te prende em canto); parado,
+fica sempre virado para voce.
 
-A ordem e sempre aleatoria (nunca sequencial) e o script evita repetir a
-mesma faixa duas vezes seguidas.
+Um SOCO nele (de maos livres, sem arma na mao) troca a musica na hora: e o
+"proxima faixa" do mod, sem tecla nenhuma, feito de dentro do jogo.
 
-Formatos aceitos: MP3 (recomendado), OGG, WAV, AIFF - o que o BASS do CLEO
-conseguir abrir.
 
-Se nao achar nenhum arquivo, aparece na tela "nenhuma musica encontrada"
-(esse e um dos dois unicos avisos do mod; o outro e o de CLEO+ faltando).
+REQUISITOS
+----------
+  * GTA San Andreas 1.0 US
+  * CLEO 4
+  * CLEO+ v1.2 ou mais novo (versao anterior tem crash certo: faltam
+    opcodes que o mod usa)
 
---- Configuracao: BoomboxGuy.ini ---
+O script CONFERE o CLEO+ na inicializacao. Se estiver faltando ou velho,
+ele mostra um aviso na tela e se encerra sozinho, sem crashar o jogo.
 
-Nesta mesma pasta o script cria sozinho, na primeira vez que o jogo abre, o
-arquivo de configuracao:
 
-    BoomboxGuy.ini
+INSTALACAO
+----------
+1) Copie o BoomboxGuy.cs para a pasta CLEO/ do GTA San Andreas.
 
-Ele guarda a aparencia do NPC, o objeto da caixa de som, onde ela fica presa
-na mao dele e o volume:
+2) Coloque suas musicas nesta pasta (CLEO/BoomboxGuy/). A estrutura fica
+   assim:
+
+       GTA San Andreas/
+         CLEO/
+           BoomboxGuy.cs          <- o mod
+           BoomboxGuy/            <- esta pasta
+             LEIA-ME.txt          <- este arquivo
+             BoomboxGuy.ini       <- configuracao (o script cria sozinho)
+             som1.mp3
+             som2.mp3
+             ...
+             som50.mp3
+
+3) Entre no jogo e digite o cheat BOOBOX.
+
+Nao precisa de DFF/TXD nenhum: por padrao a caixa e o objeto nativo do jogo
+2226 (low_hi_fi_3) e o NPC e o male01. A aparencia do NPC e o objeto da
+caixa se escolhem no BoomboxGuy.ini - veja mais abaixo.
+
+
+MUSICAS
+-------
+Nome dos arquivos: som1.mp3, som2.mp3, ... som50.mp3 (nao precisa ser
+mp3 - valem OGG, WAV e AIFF tambem, o que o BASS do CLEO abrir).
+
+  * Pode ter de 1 ate 50 musicas. O script CONFERE quais arquivos existem
+    e usa so os que estao na pasta: pode ter so a som1.mp3, ou uma
+    numeracao esburacada (som1, som4, som9), que funciona igual.
+  * A ordem e sempre ALEATORIA (nunca sequencial) e o script evita repetir
+    a mesma faixa duas vezes seguidas.
+  * Quando a musica acaba, ele sorteia outra sozinho.
+  * Pode colocar os arquivos com o jogo aberto: nao precisa reiniciar.
+  * Se nao achar nenhum arquivo, aparece na tela "nenhuma musica
+    encontrada" - e um dos dois unicos avisos do mod (o outro e o de
+    CLEO+ faltando). Todo o resto e silencioso.
+
+
+CHEATS
+------
+  BOOBOX       chama o NPC (e rele o BoomboxGuy.ini)
+  BOOBOXD      dispensa o NPC e desliga a musica
+  BBGUYTUNE    (opcional) liga/desliga o modo de ajuste da caixa na mao
+
+
+O QUE ELE FAZ
+-------------
+  * Aparece a uns 45 m, de preferencia atras de voce, e vem CORRENDO.
+  * Te segue pela rua usando a malha de navegacao (desvia de muro e
+    segue calcada). Anda, corre e dispara na sua direcao se ficar longe.
+  * Para a 2,5 m de voce - nao entra no seu corpo, nao te empurra, nao
+    te prende em canto e nao existe "pulinho" no fim do trajeto.
+  * Parado, fica SEMPRE VIRADO para voce (rua e interior).
+  * Interior: vai junto na hora e aparece logo a frente do CJ, no mesmo
+    piso. La dentro anda em linha reta (em interior nao existe malha de
+    navegacao de pedestre).
+  * Veiculo: se voce entrar em qualquer veiculo com lugar de passageiro
+    livre (carro, taxi, onibus, barco, helicoptero, aviao... e MOTO, na
+    garupa), ele entra junto e viaja com voce; sai quando voce sai. Se
+    estiver lotado, ele continua te seguindo a pe.
+  * Fuga longa (carro/aviao) sem lugar para ele: quando voce PISAR DE
+    VOLTA NO CHAO, ele aparece perto de voce (atras, para nao surgir na
+    sua cara).
+  * Nao fica plantado: se ele travar num canto (porta, escada, cerca,
+    ponto sem caminho), o script percebe pela VELOCIDADE dele e resolve
+    em tres passos - reenvia a ordem de seguir, depois tenta por LINHA
+    RETA (sem nada aparecer na tela) e, em ultimo caso, aparece perto de
+    voce. A rota normal volta sozinha depois.
+  * Cutscene (da campanha ou de missao): a musica PAUSA e volta de onde
+    parou quando a cutscene acaba, para nao sobrepor os dialogos.
+  * Vida padrao (100) e SEM reacao ao mundo: nao foge, nao se assusta,
+    nao briga, nao pertence a gangue. Se ele morrer, acabou: e so chamar
+    o cheat de novo. Se voce morrer, ele vai embora sozinho.
+  * Sem blip no mapa, sem marcador, sem icone.
+
+
+CONFIGURACAO: BoomboxGuy.ini
+----------------------------
+Nesta mesma pasta o script cria sozinho, na primeira vez que o jogo abre,
+o arquivo BoomboxGuy.ini. Ele guarda a aparencia do NPC, o objeto da caixa,
+onde ela fica presa na mao e o volume:
 
     [Ped]
     model=male01      aparencia do NPC: nome do DFF de um PEDESTRE (sem
@@ -55,7 +143,7 @@ na mao dele e o volume:
 Pode editar o arquivo com o jogo fechado ou aberto: depois de salvar, digite
 o cheat BOOBOX de novo que ele rele tudo (nao precisa reiniciar o jogo).
 O volume e lido a cada troca de musica. A skin e o objeto da caixa valem na
-proxima vez que voce chamar o cheat (BOOBOX relê o arquivo inteiro).
+proxima vez que voce chamar o cheat (BOOBOX rele o arquivo inteiro).
 
 Quem decide o que e skin de NPC e o que e objeto da caixa e o TIPO do
 modelo, nao a secao do arquivo: pedestre vira o NPC, objeto vira a caixa.
@@ -68,8 +156,9 @@ funciona, e pode ter espacos em volta do sinal de igual.
 
 Para voltar tudo ao padrao, apague o arquivo: o script cria outro.
 
---- Ajuste ao vivo (opcional) ---
 
+AJUSTE AO VIVO DA CAIXA (opcional)
+----------------------------------
 Se a caixa ficar torta ou longe da mao, digite BBGUYTUNE no jogo com o NPC
 chamado. Fica um texto na tela mostrando os valores e:
 
@@ -83,17 +172,49 @@ Ao sair do modo (digite BBGUYTUNE de novo) o arquivo e salvo sozinho, entao
 nem precisa apertar DELETE. Em jogo normal o modo nao fica ativo e nada
 aparece na tela.
 
-A tecla de salvar fica na constante CFG_TUNE_KEY do BoomboxGuy.sc (codigo
-VK do Windows): 46 = Delete, 45 = Insert, 36 = Home, 35 = End, 34 = Page
-Down, 33 = Page Up, 9 = Tab, 13 = Enter, 32 = Espaco.
 
-No jogo, a estrutura final fica:
+PROBLEMAS COMUNS
+----------------
+"Cleo+ nao encontrado" / "CLEO+ desatualizado"
+    O CLEO+ (CLEO+.cleo) nao esta na pasta CLEO/ ou e mais velho que a
+    v1.2. Instale/atualize e entre no jogo de novo.
 
-    GTA San Andreas/
-      CLEO/
-        BoomboxGuy.cs      <- o script compilado
-        BoomboxGuy/        <- esta pasta com os MP3
-          BoomboxGuy.ini   <- configuracao: skin do NPC, caixa e volume
-          som1.mp3
-          ...
-          som50.mp3
+"Nenhuma musica encontrada"
+    Nao existe nenhum som*.mp3 nesta pasta. Confira o nome (som1.mp3,
+    som2.mp3...) e se os arquivos estao em CLEO/BoomboxGuy/.
+
+O NPC nao aparece quando digito BOOBOX
+    Confira se o BoomboxGuy.cs esta na pasta CLEO/ e se o jogo tem o CLEO 4
+    instalado. Se o NPC aparecer mas ficar parado, de uma olhada se ele nao
+    esta preso atras de um muro bem na hora em que nasceu - ele se resolve
+    sozinho em alguns segundos.
+
+A skin do NPC nao mudou
+    O BOOBOX rele o BoomboxGuy.ini: confira o nome do DFF (sem .dff), se o
+    modelo existe no jogo e se ele e um PEDESTRE. Nome errado cai no male01
+    sem avisar - e sem erro.
+
+A caixa esta torta ou fora da mao
+    Use o BBGUYTUNE (veja acima) e salve com DELETE.
+
+A musica nao toca
+    Confira o volume no [Som] do BoomboxGuy.ini (0.0 = mudo) e se o
+    arquivo abre no jogo (teste outro MP3). O som sai da CAIXA, em 3D:
+    de longe e abafado mesmo, de proposito.
+
+O NPC ficou para tras
+    Se voce fugir de carro/aviao e ele nao couber, ele volta a aparecer
+    quando voce descer e pisar no chao. Se ele travar em algum canto, o
+    script resolve sozinho em alguns segundos.
+
+
+CREDITOS
+--------
+  * Mod original "90s Boombox": Guidopdu (MixMods) - a ideia de andar
+    ouvindo radio com som direcional. Este e um remake.
+  * CLEO+ e as definicoes de opcodes: Junior_Djjr (MIT).
+  * Remake em gta3script + CLEO+: este repositorio.
+
+==========================================================================
+  Duvidas, bugs e a versao mais nova: veja o README.md do repositorio.
+==========================================================================
