@@ -26,8 +26,15 @@ arquivo de configuracao:
 
     BoomboxGuy.ini
 
-Ele guarda onde a caixa de som fica presa na mao do NPC e o volume:
+Ele guarda a aparencia do NPC, onde a caixa de som fica presa na mao dele e
+o volume:
 
+    [Ped]
+    model=male01   aparencia do NPC: nome do DFF (sem .dff) ou o ID numerico
+                   do modelo. Ex.: male01, wmybu, bmycr, 7...
+                   Serve para skin vanilla ou de mod (inclusive as do
+                   ModLoader). Se o nome nao existir, o NPC usa o modelo
+                   padrao do script - sem aviso e sem erro.
     [Caixa]
     posX=0.40      posicao da caixa na mao (eixos do osso da mao!)
     posY=0.02
@@ -39,12 +46,15 @@ Ele guarda onde a caixa de som fica presa na mao do NPC e o volume:
     volume=1       de 0.0 (mudo) ate 1.0 (maximo)
 
 Pode editar o arquivo com o jogo fechado ou aberto: depois de salvar, digite
-o cheat BOOBOX de novo que ele relê tudo (nao precisa reiniciar o jogo).
-O volume e lido a cada troca de musica.
+o cheat BOOBOX de novo que ele rele tudo (nao precisa reiniciar o jogo).
+O volume e lido a cada troca de musica, e a skin tambem vale para o NPC que
+já esta na rua na proxima vez que voce chamar o cheat.
 
-Use PONTO decimal (0.5) e nao virgula. Chave escrita errado, comentario,
-linha em branco ou valor invalido sao simplesmente ignorados - a chave
-nao encontrada continua com o valor padrao. Nunca da erro nem trava.
+Use PONTO decimal (0.5) e nao virgula. Comentarios comecam com ; ou #.
+Chave escrita errado, linha em branco ou valor invalido sao simplesmente
+ignorados - a chave nao encontrada continua com o valor padrao. Nunca da
+erro nem trava. Chave com a primeira letra maiuscula (Model=, PosX=) tambem
+funciona, e pode ter espacos em volta do sinal de igual.
 
 Para voltar tudo ao padrao, apague o arquivo: o script cria outro.
 
@@ -73,7 +83,7 @@ No jogo, a estrutura final fica:
       CLEO/
         BoomboxGuy.cs      <- o script compilado
         BoomboxGuy/        <- esta pasta com os MP3
-          BoomboxGuy.ini   <- configuracao (criado pelo script)
+          BoomboxGuy.ini   <- configuracao: skin do NPC, caixa e volume
           som1.mp3
           ...
           som50.mp3

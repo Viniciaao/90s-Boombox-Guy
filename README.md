@@ -7,7 +7,8 @@ A diferença de conceito: em vez de o CJ carregar a caixa de som, um **NPC
 civil** (o "cara do som") é chamado por cheat, **aparece longe de você**
 (de preferência atrás, fora da câmera), **vem correndo** até o player
 carregando a caixa de som nas mãos e passa a te acompanhar com a música
-saindo da caixa em **áudio 3D**.
+saindo da caixa em **áudio 3D**. A aparência do NPC é escolhida no
+`BoomboxGuy.ini` — pelo **nome do DFF** ou pelo ID do modelo.
 
 ---
 
@@ -93,12 +94,15 @@ Não é necessário nenhum arquivo DFF/TXD: a caixa de som é o **objeto nativo
 do jogo** `2226 (low_hi_fi_3)`.
 
 Na primeira vez que o jogo abre, o script cria também o
-`CLEO/BoomboxGuy/BoomboxGuy.ini` (posição/rotação da caixa e volume) — veja a
+`CLEO/BoomboxGuy/BoomboxGuy.ini` (modelo do NPC, posição/rotação da caixa e
+volume) — veja a
 seção **Arquivo de configuração** mais abaixo. Tem uma cópia de exemplo
 pronta em `BoomboxGuy/BoomboxGuy.ini` no repositório.
 Um detalhe: o script **não** usa o plugin `IniFiles.cleo`, e sim os comandos
 de arquivo do próprio CLEO 4 (`0A9A/0AD4/0AD7/0AD9/0A9B`) — então o `.ini`
-funciona em qualquer instalação de CLEO 4, sem plugin extra.
+funciona em qualquer instalação de CLEO 4, sem plugin extra. Já a **busca do
+modelo pelo nome** usa o opcode `0E9C` do CLEO+, que existe a partir da v1.2
+(a mesma versão que o script já exige na checagem de dependência).
 
 ---
 
@@ -110,12 +114,13 @@ com `./build.sh` (ou `make`).
 
 | Constante | Padrão | Para que serve |
 | --- | --- | --- |
-| `CFG_PED_MODEL` | `7` (male01) | Skin do NPC. Troque pelo ID que você quiser |
+| `CFG_PED_MODEL` | `7` (male01) | Modelo **padrão** do NPC — só é usado se o `.ini` não tiver um `model=` válido |
 | `CFG_BOX_MODEL` | `2226` | Objeto da caixa de som |
 | `CFG_BOX_BONE` | `24` (`BONE_R_HAND`) | Osso onde a caixa é presa |
 | `CFG_BOX_OFF_X/Y/Z` | `0.40 / 0.02 / 0.02` | Posição da caixa na mão (**padrão do .ini**) |
 | `CFG_BOX_ROT_X/Y/Z` | `0 / -90 / 0` | Rotação da caixa (**padrão do .ini**) |
 | `CFG_BOX_SCALE` | `1.0` | Tamanho da caixa (`0.7` deixa a caixa menor) |
+| `CFG_PED_MAX_ID` | `400` | Faixa de IDs aceita como pedestre (proteção contra ID errado) |
 | `CFG_INI_MAX_LINES` | `200` | Trava de segurança na leitura do `.ini` |
 | `CFG_TUNE_POS` / `CFG_TUNE_ROT` | `0.02` / `5.0` | Tamanho do passo no modo `BBGUYTUNE` |
 | `CFG_TUNE_KEY` | `46` (Delete) | Tecla que grava o ajuste da caixa em arquivo |
@@ -141,13 +146,19 @@ com `./build.sh` (ou `make`).
 
 ### Arquivo de configuração: `CLEO/BoomboxGuy/BoomboxGuy.ini`
 
-**Posição da caixa, rotação da caixa e volume** moram num arquivo `.ini`, que
-o próprio script **cria sozinho** (já com os valores padrão) na primeira vez
-que o jogo abre:
+**Aparência do NPC, posição/rotação da caixa e volume** moram num arquivo
+`.ini`, que o próprio script **cria sozinho** (já com os valores padrão) na
+primeira vez que o jogo abre:
 
 ```ini
-; 90s Boombox Guy - configuracao da caixa de som
+; 90s Boombox Guy - configuracao
 ; Use ponto decimal (0.5), nao virgula. Nao mude o nome das chaves.
+; Comentario comeca com ; ou #.
+[Ped]
+; aparencia do NPC: nome do DFF (sem .dff, ex.: male01, wmybu, bmycr)
+; ou o ID numerico do modelo (ex.: 7). Se o nome nao existir, o
+; script usa o modelo padrao dele.
+model=male01
 [Caixa]
 posX=0.40
 posY=0.02
@@ -162,21 +173,30 @@ volume=1
 
 Como funciona:
 
+- **`[Ped] model`** — a skin do NPC. Aceita o **nome do DFF** (sem `.dff`:
+  `male01`, `wmybu`, `bmycr`…) **ou o ID numérico** (`7`). A busca pelo nome
+  é feita pelo próprio jogo (via CLEO+), então funciona com **qualquer
+  skin** — vanilla ou de mod, inclusive as instaladas por ModLoader/IMG —
+  e não liga para maiúsculas/minúsculas (`Model=MALE01` funciona).
+  Se o nome não existir (typo, mod removido), o NPC simplesmente usa o
+  modelo padrão do script, **sem aviso e sem erro**.
 - **`[Caixa]`** — onde a caixa fica presa na mão do NPC. O deslocamento usa
   os eixos **do osso da mão** (não são os eixos do mundo, por isso os números
   parecem estranhos e a rotação em Y é `-90`). Os valores acima já são um
   encaixe testado no jogo.
 - **`[Som] volume`** — de `0.0` (mudo) a `1.0` (volume máximo). É lido a cada
   troca de faixa, então dá para mudar o volume e ouvir na música seguinte.
-- **Editar**: mexa no arquivo e digite o cheat `BOOBOX` de novo (a pose é
-  relida a cada chamada — nem precisa reiniciar o jogo). Valores fora do
-  arquivo, chaves escritas errado, comentários e linhas em branco são
-  simplesmente ignorados: a chave que não for encontrada continua com o valor
-  padrão, **nunca dá erro nem trava**.
-- Chaves escritas com a primeira letra maiúscula (`PosX`, `Volume`) também
-  são aceitas. Use **ponto** decimal (`0.5`) — vírgula não funciona.
+- **Editar**: mexa no arquivo e digite o cheat `BOOBOX` de novo (tudo é
+  relido a cada chamada — nem precisa reiniciar o jogo). Passo a passo:
+  abra `CLEO/BoomboxGuy/BoomboxGuy.ini` num editor de texto simples, mude o
+  que quiser, salve, e digite `BOOBOX` no jogo.
+- Valores inválidos, chaves escritas errado, linhas em branco e comentários
+  (linhas começando com `;` ou `#`) são simplesmente ignorados: a chave que
+  não for encontrada continua com o valor padrão, **nunca dá erro nem
+  trava**. Chaves com a primeira letra maiúscula (`PosX`, `Volume`,
+  `Model`) também são aceitas, e pode ter espaços em volta do `=`.
 - Para voltar tudo ao padrão, é só apagar o arquivo: o script cria outro na
-  próxima vez que abrir o jogo.
+  próxima vez que abrir o jogo (com `model=male01`).
 
 ### Ajustando a caixa ao vivo (cheat `BBGUYTUNE`)
 
@@ -314,6 +334,11 @@ bagunçadas):
   `DELETE_RENDER_OBJECT` depois que o NPC morre — seria ponteiro inválido).
 - **Handle do ped**: todo acesso ao NPC é precedido de `DOES_CHAR_EXIST` e
   `IS_CHAR_DEAD`. O script nunca mexe em um handle morto.
+- **Modelo vindo do `.ini`**: antes de usar, o script confere que o ID está
+  na faixa de pedestres (0..399) e que o modelo existe de verdade no jogo
+  (opcode do CLEO+). Nome não encontrado, ID de veículo/objeto ou valor
+  maluco ⇒ volta para o modelo padrão em silêncio — nunca cria um ped
+  inválido.
 - O loop principal tem `WAIT 0`, e o script volta ao estado inicial se o
   player morrer, se o char sumir do pool, se o NPC morrer ou se for
   dispensado.
@@ -325,6 +350,11 @@ bagunçadas):
 
 ## Histórico de versões
 
+- **v5** — escolha da skin do NPC pelo `.ini`: `[Ped] model=` aceita o **nome
+  do DFF** (resolvido pelo próprio jogo com o opcode `0E9C` do CLEO+, então
+  vale para skins de mod, inclusive via ModLoader) ou o ID numérico; modelo
+  inválido cai no padrão sem avisar. Leitura do `.ini` mais tolerante:
+  comentários com `;`/`#`, espaços antes do `=`, chave indentada.
 - **v4** — configuração em `CLEO/BoomboxGuy/BoomboxGuy.ini`: posição e
   rotação da caixa (valores testados no jogo) e volume, lidos com comandos
   de arquivo do próprio CLEO 4 (sem plugin extra); o arquivo é criado sozinho

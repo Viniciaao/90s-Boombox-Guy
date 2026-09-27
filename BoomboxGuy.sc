@@ -26,6 +26,9 @@
 //     padrao, e depois passa a usar o que estiver nele. Da para editar com o
 //     jogo fechado (ou aberto) e so digitar BOOBOX de novo para valer:
 //
+//        [Ped]
+//        model=male01     <- aparencia do NPC: nome do DFF (sem .dff) ou o ID
+//
 //        [Caixa]
 //        posX=0.40        <- posicao da caixa na mao
 //        posY=0.02
@@ -44,7 +47,12 @@
 //        Os valores aparecem na tela; ao sair do modo (BBGUYTUNE de novo) o
 //        arquivo e salvo automaticamente. Nada disso aparece em jogo normal.
 //
-//  Requisitos: CLEO 4 + CLEO+ (o script checa o CLEO+ e avisa se faltar)
+//  O nome do DFF e resolvido pelo proprio jogo (via CLEO+), entao serve
+//  qualquer skin: vanilla (male01, wmybu, bmycr...) ou de mod, inclusive as
+//  instaladas por ModLoader. Se o nome nao existir, o NPC usa o modelo
+//  padrao do script, sem aviso nenhum na tela.
+//
+//  Requisitos: CLEO 4 + CLEO+ v1.2 ou mais novo (o script checa e avisa)
 //
 //  Como compilar (veja tambem build.sh / Makefile):
 //     gta3sc --config=gtasa --guesser --cs -fcleo -fno-entity-tracking \
@@ -56,8 +64,11 @@ SCRIPT_START
 SCRIPT_NAME bbguy
 {
 // ===================== CONFIGURACAO (pode mexer aqui) ======================
-    // Skin do NPC (0..311). 7 = male01, o civil mais generico do jogo.
+    // Modelo padrao do NPC. 7 = male01, o civil mais generico do jogo.
+    // Serve so de reserva: quem manda e a chave "model=" do BoomboxGuy.ini
+    // (nome do DFF ou ID). Se o ini nao existir/estiver invalido, usa isto.
     CONST_INT   CFG_PED_MODEL       7
+    CONST_INT   CFG_PED_MAX_ID      400     // faixa de IDs aceita como pedestre
     // Caixa de som: 2226 = low_hi_fi_3 (objeto nativo do jogo, sem mods).
     CONST_INT   CFG_BOX_MODEL       2226
     // Osso onde a caixa e presa: 24 = mao direita (BONE_R_HAND no Sanny).
@@ -127,19 +138,20 @@ SCRIPT_NAME bbguy
 
     LVAR_INT   gstate pedBox objBox boxStream playerChar
     LVAR_INT   loadTick nextAudioTick farTick stuckTick taskTick
-    LVAR_INT   bufPath trackCount lastTrack flag tmpInt dt tries
+    LVAR_INT   bufPath pedModel lastTrack flag tmpInt dt tries
     LVAR_FLOAT px py pz nx ny nz dx dy dz
     LVAR_FLOAT boxOX boxOY boxOZ boxRX boxRY boxRZ
 
     // gstate: 0 = esperando o cheat | 1 = carregando modelos
     //         2 = NPC ativo        | 3 = NPC ativo + modo de ajuste da caixa
+    // pedModel: modelo do NPC - padrao CFG_PED_MODEL, sobrescrito pelo ini
     gstate       = 0
     pedBox       = 0
     objBox       = 0
     boxStream    = 0
     playerChar   = 0
     bufPath      = 0
-    trackCount   = 0
+    pedModel     = CFG_PED_MODEL
     lastTrack    = 0
     loadTick     = 0
     nextAudioTick= 0
@@ -240,13 +252,15 @@ bbg_request:
     // relê o ini: da para editar o arquivo e so digitar o cheat de novo
     flag = 0
     GOSUB bbg_ini_load
-    IF NOT IS_MODEL_IN_CDIMAGE CFG_PED_MODEL
+    // o modelo do ped (nome OU id) foi resolvido na leitura do ini; aqui so
+    // confirmamos que ele existe mesmo antes de pedir para carregar
+    IF GET_MODEL_DOESNT_EXIST_IN_RANGE pedModel pedModel tmpInt
         RETURN
     ENDIF
     IF NOT IS_MODEL_IN_CDIMAGE CFG_BOX_MODEL
         RETURN
     ENDIF
-    REQUEST_MODEL CFG_PED_MODEL
+    REQUEST_MODEL pedModel
     REQUEST_MODEL CFG_BOX_MODEL
     GET_GAME_TIMER loadTick
     nextAudioTick = 0
@@ -264,7 +278,7 @@ bbg_wait_models:
         gstate = 0
         RETURN
     ENDIF
-    IF HAS_MODEL_LOADED CFG_PED_MODEL
+    IF HAS_MODEL_LOADED pedModel
     AND HAS_MODEL_LOADED CFG_BOX_MODEL
         // checagem de colisao: nao cria o NPC antes do mundo estar pronto
         IF IS_CHAR_WAITING_FOR_WORLD_COLLISION playerChar
@@ -284,7 +298,7 @@ bbg_spawn:
     // aparece longe, de preferencia atras do player (fora da camera)
     GOSUB bbg_pick_spawn
 
-    CREATE_CHAR PEDTYPE_CIVMALE CFG_PED_MODEL nx ny nz pedBox
+    CREATE_CHAR PEDTYPE_CIVMALE pedModel nx ny nz pedBox
     IF pedBox = 0
         GOSUB bbg_release_models
         gstate = 0
@@ -301,8 +315,8 @@ bbg_spawn:
     GOSUB bbg_make_box
     GET_GAME_TIMER loadTick          // timer das tentativas de criar a caixa
 
-    GOSUB bbg_play_track             // conta as musicas e sorteia a primeira
-    IF trackCount = 0
+    GOSUB bbg_play_track             // varre as musicas e sorteia a primeira
+    IF lastTrack = 0
         PRINT_STRING "~r~Boombox Guy: nenhuma musica encontrada." 7000
     ENDIF
     IF bufPath = 0
@@ -711,24 +725,6 @@ bbg_audio:
     SET_PLAY_3D_AUDIO_STREAM_AT_COORDS boxStream dx dy dz
     RETURN
 
-    // =======================================================================
-    //  Detecta quais MP3 existem em CLEO\BoomboxGuy\ (som1..som50)
-    // =======================================================================
-bbg_scan_tracks:
-    trackCount = 0
-    IF bufPath = 0
-        RETURN
-    ENDIF
-    tries = 1
-    WHILE tries <= CFG_MAX_TRACKS
-        GOSUB bbg_build_path
-        IF DOES_FILE_EXIST $bufPath
-            trackCount = trackCount + 1
-        ENDIF
-        tries = tries + 1
-    ENDWHILE
-    RETURN
-
     // Monta o caminho da faixa de numero 'tries' no buffer
 bbg_build_path:
     STRING_FORMAT bufPath "CLEO\BoomboxGuy\som%d.mp3" tries
@@ -784,13 +780,7 @@ bbg_play_track:
             RETURN
         ENDIF
     ENDIF
-    IF trackCount = 0
-        GOSUB bbg_scan_tracks
-        IF trackCount = 0
-            RETURN
-        ENDIF
-    ENDIF
-    GOSUB bbg_pick_track
+    GOSUB bbg_pick_track          // 0 = nenhum som*.mp3 encontrado
     IF lastTrack = 0
         RETURN
     ENDIF
@@ -892,6 +882,7 @@ bbg_ini_load:
         boxRX = CFG_BOX_ROT_X
         boxRY = CFG_BOX_ROT_Y
         boxRZ = CFG_BOX_ROT_Z
+        pedModel = CFG_PED_MODEL          // reserva, caso o ini nao tenha "model="
     ELSE
         dx = CFG_VOLUME
     ENDIF
@@ -912,13 +903,36 @@ bbg_ini_load:
     WHILE READ_STRING_FROM_FILE tmpInt bufPath CFG_PATH_SIZE
     AND tries < CFG_INI_MAX_LINES
         tries = tries + 1
-        IF flag = 0
-            GOSUB bbg_ini_line
-        ELSE
-            SCAN_STRING $bufPath "%*[vV]olume%*[^-.0-9]%f" dt dx
+        // linha comecando com ';' ou '#' e comentario: nao e lida
+        READ_MEMORY bufPath 1 0 loadTick
+        IF NOT loadTick = 59
+        AND NOT loadTick = 35
+            IF flag = 0
+                GOSUB bbg_ini_line
+            ELSE
+                SCAN_STRING $bufPath " %*[vV]olume%*[^-.0-9]%f" dt dx
+            ENDIF
         ENDIF
     ENDWHILE
     CLOSE_FILE tmpInt
+    // -----------------------------------------------------------------------
+    //  Valida o modelo do ped: se nao for um ID de pedestre que existe mesmo,
+    //  volta para o padrao do script. Assim um nome errado no ini nunca vira
+    //  um ped invalido (nem crash) - so um NPC com a skin padrao.
+    // -----------------------------------------------------------------------
+    IF flag = 0
+        IF pedModel < 0
+            pedModel = CFG_PED_MODEL
+        ELSE
+            IF pedModel > CFG_PED_MAX_ID
+                pedModel = CFG_PED_MODEL
+            ELSE
+                IF GET_MODEL_DOESNT_EXIST_IN_RANGE pedModel pedModel loadTick
+                    pedModel = CFG_PED_MODEL
+                ENDIF
+            ENDIF
+        ENDIF
+    ENDIF
     RETURN
 
     // -----------------------------------------------------------------------
@@ -928,12 +942,42 @@ bbg_ini_load:
     //   simplesmente nao mexem em nada)
     // -----------------------------------------------------------------------
 bbg_ini_line:
-    SCAN_STRING $bufPath "%*[pP]osX%*[^-.0-9]%f" dt boxOX
-    SCAN_STRING $bufPath "%*[pP]osY%*[^-.0-9]%f" dt boxOY
-    SCAN_STRING $bufPath "%*[pP]osZ%*[^-.0-9]%f" dt boxOZ
-    SCAN_STRING $bufPath "%*[rR]otX%*[^-.0-9]%f" dt boxRX
-    SCAN_STRING $bufPath "%*[rR]otY%*[^-.0-9]%f" dt boxRY
-    SCAN_STRING $bufPath "%*[rR]otZ%*[^-.0-9]%f" dt boxRZ
+    SCAN_STRING $bufPath " %*[pP]osX%*[^-.0-9]%f" dt boxOX
+    SCAN_STRING $bufPath " %*[pP]osY%*[^-.0-9]%f" dt boxOY
+    SCAN_STRING $bufPath " %*[pP]osZ%*[^-.0-9]%f" dt boxOZ
+    SCAN_STRING $bufPath " %*[rR]otX%*[^-.0-9]%f" dt boxRX
+    SCAN_STRING $bufPath " %*[rR]otY%*[^-.0-9]%f" dt boxRY
+    SCAN_STRING $bufPath " %*[rR]otZ%*[^-.0-9]%f" dt boxRZ
+
+    // -----------------------------------------------------------------------
+    //  [Ped] model= <nome do DFF ou ID>
+    //     "model=male01"  -> procura a skin pelo nome (via CLEO+, cobre mods)
+    //     "model=7"       -> usa o ID direto
+    //  Como funciona: o "%n" do scanner devolve em que caractere o valor
+    //  comeca. Se o valor comeca com digito, e ID; se nao, cortamos a string
+    //  no fim do nome (tirando o fim de linha, espacos e comentario) e
+    //  entregamos o nome para o jogo procurar.
+    //  Qualquer coisa estranha e ignorada: o modelo segue o padrao.
+    // -----------------------------------------------------------------------
+    loadTick = 0
+    SCAN_STRING $bufPath " %*[mM]odel%*[^A-Za-z0-9_]%n%c" dt nextAudioTick loadTick
+    IF dt = 1
+        nextAudioTick = bufPath + nextAudioTick      // inicio do valor
+        IF loadTick > 47
+        AND loadTick < 58
+            // ---- ID numerico ----
+            SCAN_STRING $bufPath " %*[mM]odel%*[^0-9-]%d" dt loadTick
+            pedModel = loadTick
+        ELSE
+            // ---- nome do DFF ----
+            SCAN_STRING $bufPath " %*[mM]odel%*[^A-Za-z0-9_]%*[A-Za-z0-9_]%n" dt tmpInt
+            tmpInt = bufPath + tmpInt                // fim do nome
+            WRITE_MEMORY tmpInt 1 0 0
+            IF GET_MODEL_BY_NAME $nextAudioTick loadTick
+                pedModel = loadTick
+            ENDIF
+        ENDIF
+    ENDIF
     RETURN
 
     // -----------------------------------------------------------------------
@@ -951,8 +995,19 @@ bbg_ini_write:
     GOSUB bbg_ini_load           // busca o volume atual (vai para dx)
     tmpInt = 0
     IF OPEN_FILE "CLEO\BoomboxGuy\BoomboxGuy.ini" "w" tmpInt
-        WRITE_FORMATTED_STRING_TO_FILE tmpInt "; 90s Boombox Guy - configuracao da caixa de som%c" 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "; 90s Boombox Guy - configuracao%c" 10
         WRITE_FORMATTED_STRING_TO_FILE tmpInt "; Use ponto decimal (0.5), nao virgula. Nao mude o nome das chaves.%c" 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "; Comentario comeca com ; ou #.%c" 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "[Ped]%c" 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "; aparencia do NPC: nome do DFF (sem .dff, ex.: male01, wmybu, bmycr)%c" 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "; ou o ID numerico do modelo (ex.: 7). Se o nome nao existir, o%c" 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "; script usa o modelo padrao dele.%c" 10
+        GET_MODEL_NAME_POINTER pedModel dt
+        IF dt = 0
+            WRITE_FORMATTED_STRING_TO_FILE tmpInt "model=%d%c" pedModel 10
+        ELSE
+            WRITE_FORMATTED_STRING_TO_FILE tmpInt "model=%s%c" $dt 10
+        ENDIF
         WRITE_FORMATTED_STRING_TO_FILE tmpInt "[Caixa]%c" 10
         WRITE_FORMATTED_STRING_TO_FILE tmpInt "posX=%g%c" boxOX 10
         WRITE_FORMATTED_STRING_TO_FILE tmpInt "posY=%g%c" boxOY 10
@@ -1019,7 +1074,7 @@ bbg_stop_audio:
 bbg_release_models:
     // pedido e liberado sempre em par (mesmo se NPC e caixa forem o mesmo
     // modelo, a contagem continua certa)
-    MARK_MODEL_AS_NO_LONGER_NEEDED CFG_PED_MODEL
+    MARK_MODEL_AS_NO_LONGER_NEEDED pedModel
     MARK_MODEL_AS_NO_LONGER_NEEDED CFG_BOX_MODEL
     RETURN
 }
