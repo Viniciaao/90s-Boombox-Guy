@@ -280,7 +280,7 @@ bbg_spawn:
 
     GOSUB bbg_play_track             // conta as musicas e sorteia a primeira
     IF trackCount = 0
-        PRINT_STRING "~r~Boombox Guy: nenhuma musica encontrada.~n~~w~Coloque som1.mp3 ... som50.mp3 em CLEO\BoomboxGuy\" 7000
+        PRINT_STRING "~r~Boombox Guy: nenhuma musica encontrada." 7000
     ENDIF
     IF bufPath = 0
         GOSUB bbg_alloc_path
