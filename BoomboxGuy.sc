@@ -25,7 +25,9 @@
 //     Digite BBGUYTUNE para ligar o modo de ajuste. Com ele ligado:
 //        WASD + Q/E          move a caixa (X, Y, Z)
 //        SHIFT + WASD + Q/E  gira a caixa
-//        F5                  grava os valores em CLEO/BoomboxGuy/ajuste-caixa.txt
+//        DELETE (ou CFG_TUNE_KEY)  grava os valores em
+//                                  CLEO/BoomboxGuy/ajuste-caixa.txt
+//     O arquivo tambem e gravado sozinho quando voce sai do modo de ajuste.
 //     Os valores aparecem na tela. Anote os que ficarem bons e coloque nas
 //     constantes CFG_BOX_* aqui em cima (ou me mande os numeros).
 //     Digite BBGUYTUNE de novo para sair do modo de ajuste.
@@ -65,6 +67,11 @@ SCRIPT_NAME bbguy
     // tamanho do passo no modo de ajuste (por toque de tecla)
     CONST_FLOAT CFG_TUNE_POS        0.02
     CONST_FLOAT CFG_TUNE_ROT        5.0
+    // tecla que grava o ajuste em arquivo (codigo VK do Windows).
+    //   46 = Delete   45 = Insert   36 = Home   35 = End
+    //   34 = Page Down   33 = Page Up   9 = Tab   13 = Enter   32 = Espaco
+    //   (o gta3script nao aceita VK_DELETE aqui, por isso vai o numero)
+    CONST_INT   CFG_TUNE_KEY        46
 
 
     // Onde o som 3D nasce, em relacao ao corpo do NPC (altura da mao).
@@ -339,6 +346,7 @@ bbg_active:
         ELSE
             gstate = 2
         ENDIF
+        GOSUB bbg_save_tune      // ligou ou desligou: ja grava o ajuste atual
     ENDIF
 
     // ---------------------------------------------------------------------
@@ -832,14 +840,17 @@ bbg_tune:
         SET_RENDER_OBJECT_POSITION objBox boxOX boxOY boxOZ
         SET_RENDER_OBJECT_ROTATION objBox boxRX boxRY boxRZ
     ENDIF
-    IF IS_KEY_JUST_PRESSED VK_F5
+    IF IS_KEY_JUST_PRESSED CFG_TUNE_KEY
         GOSUB bbg_save_tune
     ENDIF
-    PRINT_FORMATTED_NOW "~y~caixa~n~~w~pos %.2f %.2f %.2f~n~rot %.0f %.0f %.0f~n~WASD/QE move | SHIFT gira" 300 boxOX boxOY boxOZ boxRX boxRY boxRZ
+    // (se trocar a tecla em CFG_TUNE_KEY, troque o "DELETE" desta linha tambem)
+    PRINT_FORMATTED_NOW "~y~caixa~n~~w~pos %.2f %.2f %.2f~n~rot %.0f %.0f %.0f~n~WASD/QE move | SHIFT gira | DELETE grava" 300 boxOX boxOY boxOZ boxRX boxRY boxRZ
     RETURN
 
     // =======================================================================
-    //  Grava o ajuste atual em CLEO\BoomboxGuy\ajuste-caixa.txt (tecla F5)
+    //  Grava o ajuste atual em CLEO\BoomboxGuy\ajuste-caixa.txt
+    //  Aperte a tecla de CFG_TUNE_KEY (padrao: DELETE) ou simplesmente saia
+    //  do modo de ajuste digitando BBGUYTUNE de novo - os dois gravam.
     //  Assim da para copiar os numeros e fixar nas constantes CFG_BOX_*
     // =======================================================================
 bbg_save_tune:

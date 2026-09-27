@@ -109,6 +109,7 @@ com `./build.sh` (ou `make`).
 | `CFG_BOX_ROT_X/Y/Z` | `0 / -90 / 0` | Rotação fina da caixa |
 | `CFG_BOX_SCALE` | `1.0` | Tamanho da caixa (`0.7` deixa a caixa menor) |
 | `CFG_TUNE_POS` / `CFG_TUNE_ROT` | `0.02` / `5.0` | Tamanho do passo no modo `BBGUYTUNE` |
+| `CFG_TUNE_KEY` | `46` (Delete) | Tecla que grava o ajuste da caixa em arquivo |
 | `CFG_SND_OFF_X/Y/Z` | `0.25 / 0.10 / 0.75` | Onde o som 3D nasce em relação ao corpo |
 | `CFG_VOLUME` | `1.0` | Volume da música |
 | `CFG_MAX_TRACKS` | `50` | Número máximo de faixas que o script procura (`som1..som50`) |
@@ -145,14 +146,22 @@ adivinhar, existe um **modo de ajuste ao vivo**:
    | `W` / `S` | move a caixa no eixo Y |
    | `Q` / `E` | move a caixa no eixo Z |
    | `SHIFT` + `A/D/W/S/Q/E` | gira a caixa (X/Y/Z) |
-   | `F5` | grava o ajuste em `CLEO/BoomboxGuy/ajuste-caixa.txt` |
+   | `DELETE` | grava o ajuste em `CLEO/BoomboxGuy/ajuste-caixa.txt` |
 
    (O CJ anda um pouco ao apertar WASD — pare, ajuste e vá testando.)
-3. Quando ficar bom, aperte `F5` e cole os números nas constantes
-   `CFG_BOX_OFF_*` / `CFG_BOX_ROT_*` no topo de `BoomboxGuy.sc`
-   (o arquivo gravado já vem no formato `offset X Y Z rot X Y Z`).
+3. Quando ficar bom, aperte **`DELETE`** (ou simplesmente saia do modo: o
+   arquivo é gravado sozinho) e cole os números nas constantes
+   `CFG_BOX_OFF_*` / `CFG_BOX_ROT_*` no topo de `BoomboxGuy.sc` — o arquivo
+   `CLEO/BoomboxGuy/ajuste-caixa.txt` já vem no formato
+   `offset X Y Z rot X Y Z`.
 4. Digite `BBGUYTUNE` de novo para sair do modo de ajuste — em jogo normal
    ele não fica ativo e nada aparece na tela.
+
+A tecla de gravar é a constante `CFG_TUNE_KEY` (código VK do Windows):
+`46` = Delete (padrão), `45` = Insert, `36` = Home, `35` = End,
+`34` = Page Down, `33` = Page Up, `9` = Tab, `13` = Enter, `32` = Espaço.
+Nada de `F5`/`F-keys` — assim teclado de notebook com a fileira F quebrada
+(ou com Fn travado) continua funcionando.
 
 Se a caixa ficar grande demais para a mão, `CFG_BOX_SCALE 0.7` deixa ela
 menor (esse valor só muda recompilando, não dá para ajustar no jogo).

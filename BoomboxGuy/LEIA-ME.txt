@@ -28,10 +28,15 @@ chamado. Fica um texto na tela mostrando os valores e:
     W / S              move a caixa no eixo Y
     Q / E              move a caixa no eixo Z
     SHIFT + A/D/W/S/Q/E   gira a caixa
-    F5                 grava o ajuste em CLEO/BoomboxGuy/ajuste-caixa.txt
+    DELETE             grava o ajuste em CLEO/BoomboxGuy/ajuste-caixa.txt
 
-Digite BBGUYTUNE de novo para sair do modo de ajuste (em jogo normal ele
-nao fica ativo e nada aparece na tela).
+O arquivo tambem e gravado sozinho quando voce sai do modo de ajuste
+(digite BBGUYTUNE de novo). Em jogo normal o modo nao fica ativo e nada
+aparece na tela.
+
+A tecla de gravar fica na constante CFG_TUNE_KEY do BoomboxGuy.sc (codigo
+VK do Windows): 46 = Delete, 45 = Insert, 36 = Home, 35 = End, 34 = Page
+Down, 33 = Page Up, 9 = Tab, 13 = Enter, 32 = Espaco.
 
 No jogo, a estrutura final fica:
 
@@ -42,4 +47,4 @@ No jogo, a estrutura final fica:
           som1.mp3
           ...
           som50.mp3
-          ajuste-caixa.txt (so aparece se voce apertar F5 no BBGUYTUNE)
+          ajuste-caixa.txt (gravado pelo modo BBGUYTUNE)
