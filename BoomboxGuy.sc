@@ -21,16 +21,28 @@
 //  Na tela so aparecem 2 avisos: "nenhuma musica encontrada" e
 //  "CLEO+ nao instalado / desatualizado". Todo o resto e silencioso.
 //
-//  AJUSTE DA CAIXA (opcional, so para quem quer mexer no encaixe da mao):
-//     Digite BBGUYTUNE para ligar o modo de ajuste. Com ele ligado:
-//        WASD + Q/E          move a caixa (X, Y, Z)
-//        SHIFT + WASD + Q/E  gira a caixa
-//        DELETE (ou CFG_TUNE_KEY)  grava os valores em
-//                                  CLEO/BoomboxGuy/ajuste-caixa.txt
-//     O arquivo tambem e gravado sozinho quando voce sai do modo de ajuste.
-//     Os valores aparecem na tela. Anote os que ficarem bons e coloque nas
-//     constantes CFG_BOX_* aqui em cima (ou me mande os numeros).
-//     Digite BBGUYTUNE de novo para sair do modo de ajuste.
+//  CONFIGURACAO: CLEO/BoomboxGuy/BoomboxGuy.ini
+//     O script cria esse arquivo sozinho na primeira vez, ja com os valores
+//     padrao, e depois passa a usar o que estiver nele. Da para editar com o
+//     jogo fechado (ou aberto) e so digitar BOOBOX de novo para valer:
+//
+//        [Caixa]
+//        posX=0.40        <- posicao da caixa na mao
+//        posY=0.02
+//        posZ=0.02
+//        rotX=0           <- rotacao da caixa (graus)
+//        rotY=-90
+//        rotZ=0
+//        [Som]
+//        volume=1         <- 0.0 (mudo) a 1.0
+//
+//     AJUSTE AO VIVO (opcional, para achar os numeros da caixa):
+//        Digite BBGUYTUNE com o NPC chamado. Com o modo ligado:
+//           WASD + Q/E          move a caixa (X, Y, Z)
+//           SHIFT + WASD + Q/E  gira a caixa
+//           DELETE              salva no BoomboxGuy.ini na hora
+//        Os valores aparecem na tela; ao sair do modo (BBGUYTUNE de novo) o
+//        arquivo e salvo automaticamente. Nada disso aparece em jogo normal.
 //
 //  Requisitos: CLEO 4 + CLEO+ (o script checa o CLEO+ e avisa se faltar)
 //
@@ -51,14 +63,17 @@ SCRIPT_NAME bbguy
     // Osso onde a caixa e presa: 24 = mao direita (BONE_R_HAND no Sanny).
     CONST_INT   CFG_BOX_BONE        24
 
-    // ---- pose da caixa na mao (ajustavel no jogo: cheat BBGUYTUNE) ----
-    // ATENCAO: o deslocamento e a rotacao usam os eixos DO OSSO da mao, que
+    // ---- pose da caixa na mao ----
+    // ATENCAO 1: o deslocamento e a rotacao usam os eixos DO OSSO da mao, que
     // ficam tortos em relacao ao mundo (por isso os numeros parecem
-    // estranhos e a rotacao em Y e -90). Se a caixa ficar torta ou longe da
-    // mao no seu jogo, use o BBGUYTUNE: e o jeito certo de acertar isso.
-    CONST_FLOAT CFG_BOX_OFF_X      -0.12
-    CONST_FLOAT CFG_BOX_OFF_Y       0.0
-    CONST_FLOAT CFG_BOX_OFF_Z       0.0
+    // estranhos e a rotacao em Y e -90).
+    // ATENCAO 2: os valores abaixo sao apenas o PADRAO. Quem manda e o
+    // arquivo CLEO\BoomboxGuy\BoomboxGuy.ini (criado na primeira vez, com
+    // exatamente estes numeros). Para mudar, mexa no ini - ou use o modo
+    // BBGUYTUNE, que salva no ini na hora.
+    CONST_FLOAT CFG_BOX_OFF_X       0.40
+    CONST_FLOAT CFG_BOX_OFF_Y       0.02
+    CONST_FLOAT CFG_BOX_OFF_Z       0.02
     CONST_FLOAT CFG_BOX_ROT_X       0.0
     CONST_FLOAT CFG_BOX_ROT_Y      -90.0
     CONST_FLOAT CFG_BOX_ROT_Z       0.0
@@ -78,7 +93,8 @@ SCRIPT_NAME bbguy
     CONST_FLOAT CFG_SND_OFF_X       0.25
     CONST_FLOAT CFG_SND_OFF_Y       0.10
     CONST_FLOAT CFG_SND_OFF_Z       0.75
-    CONST_FLOAT CFG_VOLUME          1.0
+    CONST_FLOAT CFG_VOLUME          1.0     // volume padrao (o ini pode mudar)
+    CONST_INT   CFG_INI_MAX_LINES   200     // travas de seguranca na leitura do ini
     // Musicas: som1.mp3 ... somCFG_MAX_TRACKS.mp3 (maximo 50).
     CONST_INT   CFG_MAX_TRACKS      50
     CONST_INT   CFG_PATH_SIZE       64      // tamanho do buffer do caminho
@@ -149,6 +165,9 @@ SCRIPT_NAME bbguy
     // ---------------------------------------------------------------
     GOSUB bbg_check_deps
     GOSUB bbg_alloc_path
+    // le - ou cria, na primeira vez - o arquivo BoomboxGuy.ini
+    flag = 0
+    GOSUB bbg_ini_load
 
     WHILE TRUE
         WAIT 0
@@ -218,6 +237,9 @@ bbg_alloc_path:
     //  Cheat BOOBOX: pede os modelos e passa para a fase de carregamento
     // =======================================================================
 bbg_request:
+    // relê o ini: da para editar o arquivo e so digitar o cheat de novo
+    flag = 0
+    GOSUB bbg_ini_load
     IF NOT IS_MODEL_IN_CDIMAGE CFG_PED_MODEL
         RETURN
     ENDIF
@@ -275,13 +297,7 @@ bbg_spawn:
     SET_CHAR_DECISION_MAKER pedBox DM_PED_EMPTY
     TASK_TOGGLE_PED_THREAT_SCANNER pedBox FALSE FALSE FALSE
 
-    // pose da caixa nos valores configurados
-    boxOX = CFG_BOX_OFF_X
-    boxOY = CFG_BOX_OFF_Y
-    boxOZ = CFG_BOX_OFF_Z
-    boxRX = CFG_BOX_ROT_X
-    boxRY = CFG_BOX_ROT_Y
-    boxRZ = CFG_BOX_ROT_Z
+    // (a pose da caixa ja veio do BoomboxGuy.ini, lido no cheat)
     GOSUB bbg_make_box
     GET_GAME_TIMER loadTick          // timer das tentativas de criar a caixa
 
@@ -346,7 +362,7 @@ bbg_active:
         ELSE
             gstate = 2
         ENDIF
-        GOSUB bbg_save_tune      // ligou ou desligou: ja grava o ajuste atual
+        GOSUB bbg_ini_write      // ligou ou desligou: ja salva no BoomboxGuy.ini
     ENDIF
 
     // ---------------------------------------------------------------------
@@ -784,7 +800,16 @@ bbg_play_track:
     IF boxStream = 0
         RETURN
     ENDIF
-    SET_AUDIO_STREAM_VOLUME boxStream CFG_VOLUME
+    // volume: vem do ini (se a chave nao existir, fica o padrao CFG_VOLUME)
+    flag = 1
+    GOSUB bbg_ini_load
+    IF dx < 0.0
+        dx = 0.0
+    ENDIF
+    IF dx > 1.0
+        dx = 1.0
+    ENDIF
+    SET_AUDIO_STREAM_VOLUME boxStream dx
     SET_AUDIO_STREAM_STATE boxStream 1
     RETURN
 
@@ -841,28 +866,104 @@ bbg_tune:
         SET_RENDER_OBJECT_ROTATION objBox boxRX boxRY boxRZ
     ENDIF
     IF IS_KEY_JUST_PRESSED CFG_TUNE_KEY
-        GOSUB bbg_save_tune
+        GOSUB bbg_ini_write      // salva na hora
     ENDIF
     // (se trocar a tecla em CFG_TUNE_KEY, troque o "DELETE" desta linha tambem)
-    PRINT_FORMATTED_NOW "~y~caixa~n~~w~pos %.2f %.2f %.2f~n~rot %.0f %.0f %.0f~n~WASD/QE move | SHIFT gira | DELETE grava" 300 boxOX boxOY boxOZ boxRX boxRY boxRZ
+    PRINT_FORMATTED_NOW "~y~caixa~n~~w~pos %.2f %.2f %.2f~n~rot %.0f %.0f %.0f~n~WASD/QE move | SHIFT gira | DELETE salva no ini" 300 boxOX boxOY boxOZ boxRX boxRY boxRZ
     RETURN
 
     // =======================================================================
-    //  Grava o ajuste atual em CLEO\BoomboxGuy\ajuste-caixa.txt
-    //  Aperte a tecla de CFG_TUNE_KEY (padrao: DELETE) ou simplesmente saia
-    //  do modo de ajuste digitando BBGUYTUNE de novo - os dois gravam.
-    //  Assim da para copiar os numeros e fixar nas constantes CFG_BOX_*
+    //  Arquivo de configuracao: CLEO\BoomboxGuy\BoomboxGuy.ini
+    //     [Caixa]  posX posY posZ rotX rotY rotZ
+    //     [Som]    volume
+    //  O script cria o arquivo sozinho na primeira vez, com os valores
+    //  padrao, e depois passa a usar o que estiver nele. A leitura usa
+    //  apenas os comandos de arquivo do proprio CLEO 4 (0A9A abrir, 0AD7
+    //  ler linha, 0AD4 interpretar, 0AD9 escrever, 0A9B fechar) - nenhum
+    //  plugin extra -. Qualquer linha estranha e simplesmente ignorada:
+    //  o arquivo nunca derruba o jogo.
+    //     'flag' escolhe o que ler:  0 = pose da caixa   1 = volume
     // =======================================================================
-bbg_save_tune:
+bbg_ini_load:
+    IF flag = 0
+        boxOX = CFG_BOX_OFF_X
+        boxOY = CFG_BOX_OFF_Y
+        boxOZ = CFG_BOX_OFF_Z
+        boxRX = CFG_BOX_ROT_X
+        boxRY = CFG_BOX_ROT_Y
+        boxRZ = CFG_BOX_ROT_Z
+    ELSE
+        dx = CFG_VOLUME
+    ENDIF
     IF bufPath = 0
+        GOSUB bbg_alloc_path
+        IF bufPath = 0
+            RETURN
+        ENDIF
+    ENDIF
+    IF NOT OPEN_FILE "CLEO\BoomboxGuy\BoomboxGuy.ini" "r" tmpInt
+        IF flag = 0
+            GOSUB bbg_ini_write      // primeira vez: cria o arquivo
+        ENDIF
         RETURN
     ENDIF
     tries = 0
-    OPEN_FILE "CLEO\BoomboxGuy\ajuste-caixa.txt" "w" tries
-    IF NOT tries = 0
-        STRING_FORMAT bufPath "offset %.3f %.3f %.3f  rot %.1f %.1f %.1f" boxOX boxOY boxOZ boxRX boxRY boxRZ
-        WRITE_STRING_TO_FILE tries $bufPath
-        CLOSE_FILE tries
+    // (o buffer do caminho das musicas tambem serve de buffer de linha)
+    WHILE READ_STRING_FROM_FILE tmpInt bufPath CFG_PATH_SIZE
+    AND tries < CFG_INI_MAX_LINES
+        tries = tries + 1
+        IF flag = 0
+            GOSUB bbg_ini_line
+        ELSE
+            SCAN_STRING $bufPath "%*[vV]olume%*[^-.0-9]%f" dt dx
+        ENDIF
+    ENDWHILE
+    CLOSE_FILE tmpInt
+    RETURN
+
+    // -----------------------------------------------------------------------
+    //  Uma linha do ini: se a chave casar, o valor entra na variavel
+    //  (o SCAN_STRING so escreve na variavel quando a linha casa mesmo,
+    //   entao linha comentada, secao, chave escrita errado ou valor podre
+    //   simplesmente nao mexem em nada)
+    // -----------------------------------------------------------------------
+bbg_ini_line:
+    SCAN_STRING $bufPath "%*[pP]osX%*[^-.0-9]%f" dt boxOX
+    SCAN_STRING $bufPath "%*[pP]osY%*[^-.0-9]%f" dt boxOY
+    SCAN_STRING $bufPath "%*[pP]osZ%*[^-.0-9]%f" dt boxOZ
+    SCAN_STRING $bufPath "%*[rR]otX%*[^-.0-9]%f" dt boxRX
+    SCAN_STRING $bufPath "%*[rR]otY%*[^-.0-9]%f" dt boxRY
+    SCAN_STRING $bufPath "%*[rR]otZ%*[^-.0-9]%f" dt boxRZ
+    RETURN
+
+    // -----------------------------------------------------------------------
+    //  Grava o arquivo inteiro: a pose atual da caixa + o volume que ja
+    //  estava no arquivo (para nao perde-lo ao salvar um ajuste da caixa)
+    // -----------------------------------------------------------------------
+bbg_ini_write:
+    IF bufPath = 0
+        GOSUB bbg_alloc_path
+        IF bufPath = 0
+            RETURN
+        ENDIF
+    ENDIF
+    flag = 1
+    GOSUB bbg_ini_load           // busca o volume atual (vai para dx)
+    tmpInt = 0
+    IF OPEN_FILE "CLEO\BoomboxGuy\BoomboxGuy.ini" "w" tmpInt
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "; 90s Boombox Guy - configuracao da caixa de som%c" 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "; Use ponto decimal (0.5), nao virgula. Nao mude o nome das chaves.%c" 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "[Caixa]%c" 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "posX=%g%c" boxOX 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "posY=%g%c" boxOY 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "posZ=%g%c" boxOZ 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "rotX=%g%c" boxRX 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "rotY=%g%c" boxRY 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "rotZ=%g%c" boxRZ 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "[Som]%c" 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "; volume de 0.0 (mudo) ate 1.0%c" 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "volume=%g%c" dx 10
+        CLOSE_FILE tmpInt
     ENDIF
     RETURN
 

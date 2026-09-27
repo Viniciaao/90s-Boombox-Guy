@@ -19,22 +19,51 @@ conseguir abrir.
 Se nao achar nenhum arquivo, aparece na tela "nenhuma musica encontrada"
 (esse e um dos dois unicos avisos do mod; o outro e o de CLEO+ faltando).
 
---- Ajuste da caixa na mao (opcional) ---
+--- Configuracao: BoomboxGuy.ini ---
+
+Nesta mesma pasta o script cria sozinho, na primeira vez que o jogo abre, o
+arquivo de configuracao:
+
+    BoomboxGuy.ini
+
+Ele guarda onde a caixa de som fica presa na mao do NPC e o volume:
+
+    [Caixa]
+    posX=0.40      posicao da caixa na mao (eixos do osso da mao!)
+    posY=0.02
+    posZ=0.02
+    rotX=0         rotacao da caixa, em graus
+    rotY=-90
+    rotZ=0
+    [Som]
+    volume=1       de 0.0 (mudo) ate 1.0 (maximo)
+
+Pode editar o arquivo com o jogo fechado ou aberto: depois de salvar, digite
+o cheat BOOBOX de novo que ele relê tudo (nao precisa reiniciar o jogo).
+O volume e lido a cada troca de musica.
+
+Use PONTO decimal (0.5) e nao virgula. Chave escrita errado, comentario,
+linha em branco ou valor invalido sao simplesmente ignorados - a chave
+nao encontrada continua com o valor padrao. Nunca da erro nem trava.
+
+Para voltar tudo ao padrao, apague o arquivo: o script cria outro.
+
+--- Ajuste ao vivo (opcional) ---
 
 Se a caixa ficar torta ou longe da mao, digite BBGUYTUNE no jogo com o NPC
 chamado. Fica um texto na tela mostrando os valores e:
 
-    A / D              move a caixa no eixo X
-    W / S              move a caixa no eixo Y
-    Q / E              move a caixa no eixo Z
+    A / D                 move a caixa no eixo X
+    W / S                 move a caixa no eixo Y
+    Q / E                 move a caixa no eixo Z
     SHIFT + A/D/W/S/Q/E   gira a caixa
-    DELETE             grava o ajuste em CLEO/BoomboxGuy/ajuste-caixa.txt
+    DELETE                salva no BoomboxGuy.ini na hora
 
-O arquivo tambem e gravado sozinho quando voce sai do modo de ajuste
-(digite BBGUYTUNE de novo). Em jogo normal o modo nao fica ativo e nada
+Ao sair do modo (digite BBGUYTUNE de novo) o arquivo e salvo sozinho, entao
+nem precisa apertar DELETE. Em jogo normal o modo nao fica ativo e nada
 aparece na tela.
 
-A tecla de gravar fica na constante CFG_TUNE_KEY do BoomboxGuy.sc (codigo
+A tecla de salvar fica na constante CFG_TUNE_KEY do BoomboxGuy.sc (codigo
 VK do Windows): 46 = Delete, 45 = Insert, 36 = Home, 35 = End, 34 = Page
 Down, 33 = Page Up, 9 = Tab, 13 = Enter, 32 = Espaco.
 
@@ -44,7 +73,7 @@ No jogo, a estrutura final fica:
       CLEO/
         BoomboxGuy.cs      <- o script compilado
         BoomboxGuy/        <- esta pasta com os MP3
+          BoomboxGuy.ini   <- configuracao (criado pelo script)
           som1.mp3
           ...
           som50.mp3
-          ajuste-caixa.txt (gravado pelo modo BBGUYTUNE)

@@ -92,6 +92,14 @@ colocar os arquivos com o jogo aberto, sem sair do jogo).
 Não é necessário nenhum arquivo DFF/TXD: a caixa de som é o **objeto nativo
 do jogo** `2226 (low_hi_fi_3)`.
 
+Na primeira vez que o jogo abre, o script cria também o
+`CLEO/BoomboxGuy/BoomboxGuy.ini` (posição/rotação da caixa e volume) — veja a
+seção **Arquivo de configuração** mais abaixo. Tem uma cópia de exemplo
+pronta em `BoomboxGuy/BoomboxGuy.ini` no repositório.
+Um detalhe: o script **não** usa o plugin `IniFiles.cleo`, e sim os comandos
+de arquivo do próprio CLEO 4 (`0A9A/0AD4/0AD7/0AD9/0A9B`) — então o `.ini`
+funciona em qualquer instalação de CLEO 4, sem plugin extra.
+
 ---
 
 ## Configuração
@@ -105,13 +113,14 @@ com `./build.sh` (ou `make`).
 | `CFG_PED_MODEL` | `7` (male01) | Skin do NPC. Troque pelo ID que você quiser |
 | `CFG_BOX_MODEL` | `2226` | Objeto da caixa de som |
 | `CFG_BOX_BONE` | `24` (`BONE_R_HAND`) | Osso onde a caixa é presa |
-| `CFG_BOX_OFF_X/Y/Z` | `-0.12 / 0.0 / 0.0` | Posição fina da caixa na mão |
-| `CFG_BOX_ROT_X/Y/Z` | `0 / -90 / 0` | Rotação fina da caixa |
+| `CFG_BOX_OFF_X/Y/Z` | `0.40 / 0.02 / 0.02` | Posição da caixa na mão (**padrão do .ini**) |
+| `CFG_BOX_ROT_X/Y/Z` | `0 / -90 / 0` | Rotação da caixa (**padrão do .ini**) |
 | `CFG_BOX_SCALE` | `1.0` | Tamanho da caixa (`0.7` deixa a caixa menor) |
+| `CFG_INI_MAX_LINES` | `200` | Trava de segurança na leitura do `.ini` |
 | `CFG_TUNE_POS` / `CFG_TUNE_ROT` | `0.02` / `5.0` | Tamanho do passo no modo `BBGUYTUNE` |
 | `CFG_TUNE_KEY` | `46` (Delete) | Tecla que grava o ajuste da caixa em arquivo |
 | `CFG_SND_OFF_X/Y/Z` | `0.25 / 0.10 / 0.75` | Onde o som 3D nasce em relação ao corpo |
-| `CFG_VOLUME` | `1.0` | Volume da música |
+| `CFG_VOLUME` | `1.0` | Volume padrão da música (**o `.ini` pode mudar**) |
 | `CFG_MAX_TRACKS` | `50` | Número máximo de faixas que o script procura (`som1..som50`) |
 | `CFG_PATH_SIZE` | `64` | Tamanho do buffer do caminho do MP3 |
 | `CFG_CLEOPLUS_MIN` | `16908288` (`0x01020000` = v1.2.0.0) | Versão mínima do CLEO+ aceita |
@@ -130,15 +139,51 @@ com `./build.sh` (ou `make`).
 | `CFG_LOAD_MS` | `10000` | Timeout ao carregar modelos/mundo |
 | `CFG_AUDIO_RETRY_MS` | `20000` | Espera entre tentativas se nenhum MP3 abrir |
 
-### Ajustando a caixa na mão (cheat `BBGUYTUNE`)
+### Arquivo de configuração: `CLEO/BoomboxGuy/BoomboxGuy.ini`
 
-A caixa é presa no **osso da mão direita**, e o deslocamento/rotação usam os
-eixos **do osso** — que não são os eixos do mundo (por isso os números
-parecem estranhos e a rotação em Y é `-90`). Em vez de ficar tentando
-adivinhar, existe um **modo de ajuste ao vivo**:
+**Posição da caixa, rotação da caixa e volume** moram num arquivo `.ini`, que
+o próprio script **cria sozinho** (já com os valores padrão) na primeira vez
+que o jogo abre:
+
+```ini
+; 90s Boombox Guy - configuracao da caixa de som
+; Use ponto decimal (0.5), nao virgula. Nao mude o nome das chaves.
+[Caixa]
+posX=0.40
+posY=0.02
+posZ=0.02
+rotX=0
+rotY=-90
+rotZ=0
+[Som]
+; volume de 0.0 (mudo) ate 1.0
+volume=1
+```
+
+Como funciona:
+
+- **`[Caixa]`** — onde a caixa fica presa na mão do NPC. O deslocamento usa
+  os eixos **do osso da mão** (não são os eixos do mundo, por isso os números
+  parecem estranhos e a rotação em Y é `-90`). Os valores acima já são um
+  encaixe testado no jogo.
+- **`[Som] volume`** — de `0.0` (mudo) a `1.0` (volume máximo). É lido a cada
+  troca de faixa, então dá para mudar o volume e ouvir na música seguinte.
+- **Editar**: mexa no arquivo e digite o cheat `BOOBOX` de novo (a pose é
+  relida a cada chamada — nem precisa reiniciar o jogo). Valores fora do
+  arquivo, chaves escritas errado, comentários e linhas em branco são
+  simplesmente ignorados: a chave que não for encontrada continua com o valor
+  padrão, **nunca dá erro nem trava**.
+- Chaves escritas com a primeira letra maiúscula (`PosX`, `Volume`) também
+  são aceitas. Use **ponto** decimal (`0.5`) — vírgula não funciona.
+- Para voltar tudo ao padrão, é só apagar o arquivo: o script cria outro na
+  próxima vez que abrir o jogo.
+
+### Ajustando a caixa ao vivo (cheat `BBGUYTUNE`)
+
+Se quiser achar os números da caixa sem ficar editando e recarregando:
 
 1. Chame o NPC (`BOOBOX`) e digite `BBGUYTUNE`.
-2. Com o modo ligado, o jogo mostra os valores atuais na tela e:
+2. Com o modo ligado, os valores atuais aparecem na tela e:
 
    | Teclas | O que fazem |
    | --- | --- |
@@ -146,25 +191,17 @@ adivinhar, existe um **modo de ajuste ao vivo**:
    | `W` / `S` | move a caixa no eixo Y |
    | `Q` / `E` | move a caixa no eixo Z |
    | `SHIFT` + `A/D/W/S/Q/E` | gira a caixa (X/Y/Z) |
-   | `DELETE` | grava o ajuste em `CLEO/BoomboxGuy/ajuste-caixa.txt` |
+   | `DELETE` | salva no `BoomboxGuy.ini` na hora |
 
    (O CJ anda um pouco ao apertar WASD — pare, ajuste e vá testando.)
-3. Quando ficar bom, aperte **`DELETE`** (ou simplesmente saia do modo: o
-   arquivo é gravado sozinho) e cole os números nas constantes
-   `CFG_BOX_OFF_*` / `CFG_BOX_ROT_*` no topo de `BoomboxGuy.sc` — o arquivo
-   `CLEO/BoomboxGuy/ajuste-caixa.txt` já vem no formato
-   `offset X Y Z rot X Y Z`.
-4. Digite `BBGUYTUNE` de novo para sair do modo de ajuste — em jogo normal
-   ele não fica ativo e nada aparece na tela.
+3. Ao **sair** do modo (digite `BBGUYTUNE` de novo) o arquivo é **salvo
+   sozinho** — nem precisa apertar `DELETE`. Em jogo normal o modo não fica
+   ativo e nada aparece na tela.
 
-A tecla de gravar é a constante `CFG_TUNE_KEY` (código VK do Windows):
+A tecla de salvar é a constante `CFG_TUNE_KEY` (código VK do Windows):
 `46` = Delete (padrão), `45` = Insert, `36` = Home, `35` = End,
-`34` = Page Down, `33` = Page Up, `9` = Tab, `13` = Enter, `32` = Espaço.
-Nada de `F5`/`F-keys` — assim teclado de notebook com a fileira F quebrada
-(ou com Fn travado) continua funcionando.
-
-Se a caixa ficar grande demais para a mão, `CFG_BOX_SCALE 0.7` deixa ela
-menor (esse valor só muda recompilando, não dá para ajustar no jogo).
+`34` = Page Down, `33` = Page Up, `9` = Tab, `13` = Enter, `32` = Espaço —
+nada de `F5`/`F-keys`, que em muitos teclados de notebook estão quebradas.
 
 ---
 
@@ -288,10 +325,15 @@ bagunçadas):
 
 ## Histórico de versões
 
+- **v4** — configuração em `CLEO/BoomboxGuy/BoomboxGuy.ini`: posição e
+  rotação da caixa (valores testados no jogo) e volume, lidos com comandos
+  de arquivo do próprio CLEO 4 (sem plugin extra); o arquivo é criado sozinho
+  com os valores padrão e relido a cada `BOOBOX`; o `BBGUYTUNE` agora salva
+  direto no `.ini` (tecla `DELETE`, além do autosave ao sair do modo).
 - **v3** — spawn longe e fora da câmera (vem correndo até você); NPC entra
   no seu veículo como passageiro quando tem lugar; só as 2 mensagens de
   erro/aviso na tela (todo o resto silencioso); modo de ajuste da caixa na
-  mão com o cheat `BBGUYTUNE` (com gravação do ajuste em arquivo).
+  mão com o cheat `BBGUYTUNE`.
 - **v2** — cutscene pausa a música; teleporte só com colisão pronta;
   detecção de 1..50 faixas em runtime; sorteio aleatório sem repetir;
   checagem do CLEO+ na inicialização.
