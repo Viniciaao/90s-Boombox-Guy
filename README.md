@@ -121,7 +121,7 @@ com `./build.sh` (ou `make`).
 | --- | --- | --- |
 | `CFG_PED_MODEL` | `7` (male01) | Skin **padrão** do NPC — só é usada se o `.ini` não tiver um `model=` válido |
 | `CFG_BOX_MODEL` | `2226` (low_hi_fi_3) | **Objeto padrão** da caixa de som (idem: reserva do `.ini`) |
-| `CFG_VAR_BOX` | `1023` | Onde fica guardado, entre um quadro e outro, o objeto da caixa escolhido no `.ini` (uma "var compartilhada" do CLEO — as 32 `LVAR` do script estão todas em uso) |
+| `CFG_VAR_BOX` / `CFG_VAR_INI` | `1023` / `1022` | "Vars compartilhadas" do CLEO (`0AB3`/`0AB4`) que guardam o objeto da caixa escolhido no `.ini` e o **handle do arquivo** — as 32 `LVAR` do script estão todas em uso, e o parser do `.ini` usa `tmpInt`/`dt`/`loadTick` como rascunho |
 | `CFG_BOX_BONE` | `24` (`BONE_R_HAND`) | Osso onde a caixa é presa |
 | `CFG_BOX_OFF_X/Y/Z` | `0.40 / 0.02 / 0.02` | Posição da caixa na mão (**padrão do .ini**) |
 | `CFG_BOX_ROT_X/Y/Z` | `0 / -90 / 0` | Rotação da caixa (**padrão do .ini**) |
@@ -334,11 +334,19 @@ bagunçadas):
 - **Nada de variáveis globais do jogo.** O trabalho é todo feito com as
   `LVAR_*` locais do script — 32, exatamente o limite do CLEO (por isso o
   script evita variáveis "de enfeite"). O único valor que precisa sobreviver
-  de um quadro para o outro além delas, o **objeto da caixa escolhido no
-  `.ini`**, mora numa *var compartilhada do CLEO* (`0AB3`/`0AB4`, índice
-  `CFG_VAR_BOX`): são 1024 espaços numerados do próprio CLEO, não são
-  variáveis do savegame do jogo, e o valor é conferido de novo toda vez que
-  é usado — se outro script escrever por cima, a caixa só volta ao padrão.
+  de um quadro para o outro além delas mora em *vars compartilhadas do CLEO*
+  (`0AB3`/`0AB4`): o **objeto da caixa escolhido no `.ini`** (`CFG_VAR_BOX`)
+  e o **handle do arquivo `.ini`** (`CFG_VAR_INI`). São 1024 espaços
+  numerados do próprio CLEO, não são variáveis do savegame do jogo. Os dois
+  são revalidados a cada uso: o handle é reconferido a cada linha lida
+  (valor pequeno = lixo ⇒ o script para de ler e fica com os padrões) e o
+  modelo da caixa passa pelo teste de tipo — se outro script escrever por
+  cima, nada quebra.
+- **Handle de arquivo fora das LVARs.** O parser do `.ini` usa
+  `tmpInt`/`dt`/`loadTick` como rascunho; enquanto o handle do arquivo
+  morava em `tmpInt`, a primeira linha `model=` sobrescrevia o handle e o
+  `fgets` era chamado com um ponteiro inválido — crash. Hoje o handle fica
+  na var `CFG_VAR_INI` e é re-lido antes de cada linha.
 - **Modelos**: os dois modelos (NPC e caixa) são pedidos com `REQUEST_MODEL`
   e só depois de `HAS_MODEL_LOADED` o ped é criado; se estourar o timeout,
   o script volta ao estado inicial em silêncio. Os modelos são liberados com
@@ -382,6 +390,13 @@ bagunçadas):
 
 ## Histórico de versões
 
+- **v6.1** — correção de crash: o handle do arquivo `.ini` estava numa
+  variável que o parser das linhas usava como rascunho. Ao ler a primeira
+  linha `model=`, o handle virava outro número (o tipo do modelo, `7`) e a
+  leitura seguinte caía num ponteiro inválido. Agora o handle mora numa var
+  do CLEO (`CFG_VAR_INI`) e é conferido antes de cada linha. Também saiu o
+  `SCRIPT_NAME` do script (opcional no CLEO — o nome que aparece nos logs
+  vem do nome do arquivo `.cs`).
 - **v6** — escolha do **objeto da caixa** pelo `.ini`: `[Caixa] model=` aceita
   o **nome do DFF** (resolvido pelo jogo com `0E9C`) ou o ID, e o modelo é
   validado pelo **tipo** com o opcode `0E7F` — só entra objeto (atômico,

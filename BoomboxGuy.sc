@@ -66,7 +66,6 @@
 // ===========================================================================
 
 SCRIPT_START
-SCRIPT_NAME bbguy
 {
 // ===================== CONFIGURACAO (pode mexer aqui) ======================
     // Modelo padrao do NPC. 7 = male01, o civil mais generico do jogo.
@@ -83,6 +82,12 @@ SCRIPT_NAME bbguy
     // se algum outro script escrever por cima dele o pior que pode acontecer
     // e a caixa voltar para CFG_BOX_MODEL - nunca um modelo invalido.
     CONST_INT   CFG_VAR_BOX         1023
+    // Handle do arquivo .ini (outra var do CLEO). O parser das linhas usa
+    // tmpInt, dt e loadTick como rascunho, entao o handle NAO pode morar numa
+    // LVAR: guardar o handle em tmpInt foi exatamente o que derrubou o jogo
+    // quando a linha "model=" foi lida (o handle virava 7 e o fgets caia em
+    // cima de um ponteiro invalido). Aqui ele fica fora do alcance do parser.
+    CONST_INT   CFG_VAR_INI         1022
     // Osso onde a caixa e presa: 24 = mao direita (BONE_R_HAND no Sanny).
     CONST_INT   CFG_BOX_BONE        24
 
@@ -889,6 +894,24 @@ bbg_tune:
     PRINT_FORMATTED_NOW "~y~caixa~n~~w~pos %.2f %.2f %.2f~n~rot %.0f %.0f %.0f~n~WASD/QE move | SHIFT gira | DELETE salva no ini" 300 boxOX boxOY boxOZ boxRX boxRY boxRZ
     RETURN
 
+    // -----------------------------------------------------------------------
+    //  Le UMA linha do ini e devolve em 'dt': 1 = leu, 0 = acabou (ou o
+    //  handle sumiu). O handle fica guardado na var do CLEO CFG_VAR_INI e e
+    //  re-buscado aqui a cada linha: assim 'tmpInt' pode ser usado como
+    //  rascunho pelo parser sem derrubar a leitura (era o bug do crash).
+    //  Handle de arquivo de verdade e um ponteiro: valor pequeno = lixo, e
+    //  melhor parar de ler do que passar um ponteiro qualquer para o fgets.
+    // -----------------------------------------------------------------------
+bbg_ini_read:
+    GET_CLEO_SHARED_VAR CFG_VAR_INI tmpInt
+    dt = 0
+    IF tmpInt > 65536
+        IF READ_STRING_FROM_FILE tmpInt bufPath CFG_PATH_SIZE
+            dt = 1
+        ENDIF
+    ENDIF
+    RETURN
+
     // =======================================================================
     //  Arquivo de configuracao: CLEO\BoomboxGuy\BoomboxGuy.ini
     //     [Caixa]  posX posY posZ rotX rotY rotZ
@@ -927,9 +950,12 @@ bbg_ini_load:
         ENDIF
         RETURN
     ENDIF
+    // o handle vai para a var do CLEO: o parser pode usar as LVARs a vontade
+    SET_CLEO_SHARED_VAR CFG_VAR_INI tmpInt
     tries = 0
     // (o buffer do caminho das musicas tambem serve de buffer de linha)
-    WHILE READ_STRING_FROM_FILE tmpInt bufPath CFG_PATH_SIZE
+    GOSUB bbg_ini_read
+    WHILE dt = 1
     AND tries < CFG_INI_MAX_LINES
         tries = tries + 1
         // linha comecando com ';' ou '#' e comentario: nao e lida
@@ -942,8 +968,14 @@ bbg_ini_load:
                 SCAN_STRING $bufPath " %*[vV]olume%*[^-.0-9]%f" dt dx
             ENDIF
         ENDIF
+        GOSUB bbg_ini_read
     ENDWHILE
-    CLOSE_FILE tmpInt
+    // fecha o arquivo (com a mesma conferencia do handle: fechar um ponteiro
+    // invalido tambem derruba o jogo)
+    GET_CLEO_SHARED_VAR CFG_VAR_INI tmpInt
+    IF tmpInt > 65536
+        CLOSE_FILE tmpInt
+    ENDIF
     // (o modelo do ped e o da caixa ja foram conferidos linha por linha:
     //  veja bbg_ini_line e bbg_box_model)
     RETURN
@@ -1027,6 +1059,9 @@ bbg_ini_write:
     flag = 1
     GOSUB bbg_ini_load           // busca o volume atual (vai para dx)
     tmpInt = 0
+    // ATENCAO: daqui para baixo tmpInt e o handle do arquivo de escrita.
+    // Nada chamado dentro deste IF pode usar tmpInt (bbg_box_model usa so
+    // 'tries' e 'dt' de proposito).
     IF OPEN_FILE "CLEO\BoomboxGuy\BoomboxGuy.ini" "w" tmpInt
         WRITE_FORMATTED_STRING_TO_FILE tmpInt "; 90s Boombox Guy - configuracao%c" 10
         WRITE_FORMATTED_STRING_TO_FILE tmpInt "; Use ponto decimal (0.5), nao virgula. Nao mude o nome das chaves.%c" 10
