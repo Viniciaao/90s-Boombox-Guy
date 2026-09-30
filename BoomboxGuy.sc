@@ -34,10 +34,13 @@
 //     jogo fechado (ou aberto) e so digitar BOOBOX de novo para valer:
 //
 //        [Ped]
-//        model=male01     <- aparencia do NPC: nome do DFF (sem .dff) ou o ID
+//        model=male01     <- aparencia do NPC: nome do DFF (sem .dff) ou o ID.
+//                            Aceita LISTA: model=wmybu,male01,fam1,bfori - a cada
+//                            BOOBOX o script sorteia uma (sem repetir a anterior)
 //
 //        [Caixa]
 //        model=low_hi_fi_3  <- objeto da caixa: nome do DFF (sem .dff) ou o ID
+//        txd=...            <- (opcional) so para a caixa por arquivo, veja abaixo
 //        posX=0.40        <- posicao da caixa na mao
 //        posY=0.02
 //        posZ=0.02
@@ -63,6 +66,18 @@
 //  Se o nome nao existir, se o modelo nao for do tipo certo para o lugar
 //  (NPC = pedestre, caixa = objeto) ou se o arquivo dele nem estiver no jogo,
 //  o padrao de reserva continua valendo, sem aviso nenhum na tela.
+//
+//  CAIXA POR ARQUIVO (objeto que nao esta em nenhum .ide):
+//     O nome do DFF so vira modelo se o jogo o conhece (.ide, inclusive o de
+//     ModLoader/fastman92): o 0E9C procura na tabela de modelos registrados.
+//     Objeto novo, sem ID, nao existe la. Para esse caso o [Caixa] model=
+//     aceita o nome de um DFF+TXD soltos em CLEO/BoomboxGuy/ (radio.dff +
+//     radio.txd  ->  model=radio). O script confere os dois arquivos e chama o
+//     LOAD_SPECIAL_MODEL do CLEO+ (modelo lido do disco, sem ID) e prende o
+//     resultado na mao do NPC com CREATE_RENDER_OBJECT_TO_CHAR_BONE_FROM_SPECIAL.
+//     So vale para a CAIXA: ped precisa de ID (o jogo nao cria ped sem ele).
+//     Ordem: ID/nome conhecido pelo jogo  >  arquivo em CLEO/BoomboxGuy/  >
+//     caixa padrao (low_hi_fi_3). Falhou = cai para a proxima, sem aviso.
 //
 //  Requisitos: CLEO 4 + CLEO+ v1.2 ou mais novo (o script checa e avisa)
 //
@@ -109,6 +124,22 @@ SCRIPT_START
     // (porta, escada, canto de calcada) e volta a 0 quando ele chega perto de
     // voce ou e reposicionado. Veja bbg_stuck_check.
     CONST_INT   CFG_VAR_ROUTE       1018
+    // ---- modelos vindos do .ini (lista de peds e caixa por ARQUIVO) ----
+    // Secao do .ini que o parser esta lendo agora: 0 = qualquer uma, 1 = [Caixa].
+    CONST_INT   CFG_VAR_SECT        1017
+    // Quantos peds validos a linha [Ped] model= trouxe (0 = usa CFG_PED_MODEL).
+    CONST_INT   CFG_VAR_PEDN        1016
+    // Ultimo ped sorteado (para nao repetir a mesma skin duas vezes seguidas).
+    CONST_INT   CFG_VAR_LASTPED     1015
+    // Caixa por ARQUIVO (CLEO+ LOAD_SPECIAL_MODEL): handle do modelo especial
+    // que vale para a chamada atual (0 = caixa normal, de modelo do jogo).
+    CONST_INT   CFG_VAR_SPECIAL     1014
+    // Cache: o ultimo modelo especial carregado e a "chave" (hash dos nomes
+    // do DFF/TXD) dele. Se o ini continuar apontando para o mesmo arquivo, o
+    // BOOBOX reaproveita o handle em vez de ler o TXD de novo (o LOAD_SPECIAL_
+    // MODEL recarrega o TXD por cima do anterior e vaza memoria a cada uso).
+    CONST_INT   CFG_VAR_CACHE_H     1013
+    CONST_INT   CFG_VAR_CACHE_K     1012
     // Osso onde a caixa e presa: 24 = mao direita (BONE_R_HAND no Sanny).
     CONST_INT   CFG_BOX_BONE        24
 
@@ -146,7 +177,28 @@ SCRIPT_START
     CONST_INT   CFG_INI_MAX_LINES   200     // travas de seguranca na leitura do ini
     // Musicas: som1.mp3 ... somCFG_MAX_TRACKS.mp3 (maximo 50).
     CONST_INT   CFG_MAX_TRACKS      50
-    CONST_INT   CFG_PATH_SIZE       64      // tamanho do buffer do caminho
+    // Buffer de linha do .ini / caminho da musica. Uma linha "model=a,b,c,d"
+    // com varios peds precisa de espaco: 128 cabe uma lista de uns 15 nomes.
+    CONST_INT   CFG_PATH_SIZE       128
+    // ---- memoria do script: UM bloco so (ALLOCATE_MEMORY), guardado em bufPath ----
+    // Fica dentro do bloco porque as 32 LVARs estao em uso e porque memoria
+    // alocada pelo CLEO morre junto com o script (um ponteiro guardado em var
+    // compartilhada ficaria pendurado quando o jogo recarrega os scripts).
+    //   0..127    linha do .ini / caminho da musica (CFG_PATH_SIZE)
+    //   128..191  ids dos peds da lista (CFG_PED_MAX inteiros)
+    //   192..319  texto original do model= de [Ped] (para regravar o .ini)
+    //   320..367  nome do DFF da caixa por arquivo (vazio = nao usa)
+    //   368..415  nome do TXD da caixa por arquivo (vazio = igual ao DFF)
+    //   416..543  caminhos montados para o LOAD_SPECIAL_MODEL (2 x 64)
+    CONST_INT   CFG_PED_MAX         16      // quantos peds cabem na lista
+    CONST_INT   CFG_MEM_PEDS        128
+    CONST_INT   CFG_MEM_PEDTXT      192
+    CONST_INT   CFG_MEM_DFF         320
+    CONST_INT   CFG_MEM_TXD         368
+    CONST_INT   CFG_MEM_FILE        416
+    CONST_INT   CFG_MEM_FILE2       480
+    CONST_INT   CFG_MEM_SIZE        544
+    CONST_INT   CFG_NAME_MAX        40      // maior nome de arquivo aceito (sem extensao)
     // Versao minima do CLEO+ exigida (0x01020000 = v1.2.0.0).
     CONST_INT   CFG_CLEOPLUS_MIN    16908288
     // ---- onde ele aparece quando o cheat e digitado (longe de voce) ----
@@ -319,7 +371,16 @@ bbg_check_deps:
     // =======================================================================
 bbg_alloc_path:
     bufPath = 0
-    ALLOCATE_MEMORY CFG_PATH_SIZE bufPath
+    ALLOCATE_MEMORY CFG_MEM_SIZE bufPath
+    IF NOT bufPath = 0
+        // textos comecam vazios (a memoria alocada vem com lixo)
+        dt = bufPath + CFG_MEM_PEDTXT
+        WRITE_MEMORY dt 1 0 0
+        dt = bufPath + CFG_MEM_DFF
+        WRITE_MEMORY dt 1 0 0
+        dt = bufPath + CFG_MEM_TXD
+        WRITE_MEMORY dt 1 0 0
+    ENDIF
     RETURN
 
     // =======================================================================
@@ -329,9 +390,20 @@ bbg_request:
     // relê o ini: da para editar o arquivo e so digitar o cheat de novo
     flag = 0
     GOSUB bbg_ini_load
+    // A lista de peds do ini (model=a,b,c,d) ja foi lida: sorteia uma skin.
+    // Sem lista valida, pedModel continua sendo o CFG_PED_MODEL.
+    GOSUB bbg_pick_ped
     // O modelo do ped (nome OU id) foi resolvido na leitura do ini. Ultima
     // conferencia antes de pedir: existe mesmo e e de pedestre? Criar um
-    // char com modelo que nao e de gente e pedido de crash.
+    // char com modelo que nao e de gente e pedido de crash. Se o sorteado
+    // falhar aqui, tenta o padrao antes de desistir.
+    IF GET_MODEL_DOESNT_EXIST_IN_RANGE pedModel pedModel tmpInt
+        pedModel = CFG_PED_MODEL
+    ENDIF
+    GET_MODEL_TYPE pedModel tmpInt
+    IF NOT tmpInt = MODEL_TYPE_PED
+        pedModel = CFG_PED_MODEL
+    ENDIF
     IF GET_MODEL_DOESNT_EXIST_IN_RANGE pedModel pedModel tmpInt
         RETURN
     ENDIF
@@ -339,6 +411,9 @@ bbg_request:
     IF NOT tmpInt = MODEL_TYPE_PED
         RETURN
     ENDIF
+    // Caixa por arquivo (LOAD_SPECIAL_MODEL), se o ini pediu uma. Nao barra o
+    // cheat: se der errado, a caixa normal (abaixo) assume.
+    GOSUB bbg_load_special
     // A caixa: pega o objeto escolhido no ini, ja conferido (bbg_box_model).
     // Se o arquivo dele nao estiver no jogo, cai no padrao: melhor um NPC com
     // a caixa original do que NPC nenhum.
@@ -354,6 +429,144 @@ bbg_request:
     GET_GAME_TIMER loadTick
     nextAudioTick = 0
     gstate = 1
+    RETURN
+
+    // =======================================================================
+    //  Sorteia o ped da lista do ini ([Ped] model=wmybu,male01,fam1,bfori).
+    //  Com mais de um, nao repete o ultimo sorteado. Lista vazia: nao mexe em
+    //  pedModel (que ja e o CFG_PED_MODEL). Rascunho: tries, dt, loadTick, tmpInt.
+    // =======================================================================
+bbg_pick_ped:
+    GET_CLEO_SHARED_VAR CFG_VAR_PEDN tries
+    IF tries < 1
+        RETURN
+    ENDIF
+    IF bufPath = 0
+        RETURN
+    ENDIF
+    GET_CLEO_SHARED_VAR CFG_VAR_LASTPED dt
+    loadTick = 0
+    WHILE loadTick < 6
+        loadTick = loadTick + 1
+        // 0209 sorteia de 'min' ate 'max'-1
+        GENERATE_RANDOM_INT_IN_RANGE 0 tries tmpInt
+        IF tmpInt >= tries
+            tmpInt = 0
+        ENDIF
+        tmpInt = tmpInt * 4
+        tmpInt = tmpInt + bufPath
+        tmpInt = tmpInt + CFG_MEM_PEDS
+        READ_MEMORY tmpInt 4 0 pedModel
+        // aceita se a lista tem um so, ou se nao e igual ao ultimo
+        IF tries < 2
+            loadTick = 99
+        ELSE
+            IF NOT pedModel = dt
+                loadTick = 99
+            ENDIF
+        ENDIF
+    ENDWHILE
+    SET_CLEO_SHARED_VAR CFG_VAR_LASTPED pedModel
+    RETURN
+
+    // =======================================================================
+    //  Caixa por ARQUIVO: CLEO+ LOAD_SPECIAL_MODEL
+    //  Para um objeto que NAO esta em nenhum .ide (sem ID no jogo), o ini traz
+    //  o nome de um par DFF+TXD solto em CLEO\BoomboxGuy\ (ex.: radio.dff e
+    //  radio.txd). O script le os dois arquivos direto do disco, sem ID.
+    //  Saida: CFG_VAR_SPECIAL = handle (0 = nao usa; a caixa normal assume).
+    //  Rascunho: dt, tmpInt, loadTick, nextAudioTick, farTick, stuckTick,
+    //  taskTick (o NPC ainda nao existe aqui).
+    // =======================================================================
+bbg_load_special:
+    SET_CLEO_SHARED_VAR CFG_VAR_SPECIAL 0
+    IF bufPath = 0
+        RETURN
+    ENDIF
+    // o ini apontou para um modelo que o jogo conhece (nome/ID)? Entao esse
+    // vale e nao ha arquivo nenhum para ler.
+    GET_CLEO_SHARED_VAR CFG_VAR_BOX tmpInt
+    IF tmpInt > 0
+        RETURN
+    ENDIF
+    // nome do DFF (vazio = o ini nao pediu caixa por arquivo)
+    nextAudioTick = bufPath + CFG_MEM_DFF
+    READ_MEMORY nextAudioTick 1 0 tmpInt
+    IF tmpInt = 0
+        RETURN
+    ENDIF
+    // nome do TXD (vazio = o mesmo nome do DFF)
+    farTick = bufPath + CFG_MEM_TXD
+    READ_MEMORY farTick 1 0 tmpInt
+    IF tmpInt = 0
+        farTick = nextAudioTick
+    ENDIF
+
+    // chave do cache: hash dos dois nomes
+    loadTick = 17
+    stuckTick = nextAudioTick
+    GOSUB bbg_hash
+    loadTick = loadTick * 31
+    loadTick = loadTick + 124
+    stuckTick = farTick
+    GOSUB bbg_hash
+
+    // ja carregado com esses mesmos nomes? Reaproveita.
+    GET_CLEO_SHARED_VAR CFG_VAR_CACHE_H tmpInt
+    GET_CLEO_SHARED_VAR CFG_VAR_CACHE_K dt
+    IF NOT tmpInt = 0
+        IF dt = loadTick
+            SET_CLEO_SHARED_VAR CFG_VAR_SPECIAL tmpInt
+            RETURN
+        ENDIF
+    ENDIF
+
+    // Confere os dois arquivos ANTES de chamar o CLEO+: o LOAD_SPECIAL_MODEL
+    // com TXD errado/ausente e o tipo de coisa que trava o jogo.
+    tmpInt = bufPath + CFG_MEM_FILE
+    STRING_FORMAT tmpInt "CLEO\BoomboxGuy\%s.dff" $nextAudioTick
+    IF NOT DOES_FILE_EXIST $tmpInt
+        RETURN
+    ENDIF
+    STRING_FORMAT tmpInt "CLEO\BoomboxGuy\%s.txd" $farTick
+    IF NOT DOES_FILE_EXIST $tmpInt
+        RETURN
+    ENDIF
+
+    // O comando poe ".dff" e ".txd" sozinho: vai o caminho sem extensao
+    // (relativo a pasta do jogo).
+    tmpInt = bufPath + CFG_MEM_FILE
+    dt = bufPath + CFG_MEM_FILE2
+    STRING_FORMAT tmpInt "CLEO\BoomboxGuy\%s" $nextAudioTick
+    STRING_FORMAT dt "CLEO\BoomboxGuy\%s" $farTick
+    taskTick = 0
+    IF LOAD_SPECIAL_MODEL $tmpInt $dt taskTick
+        IF NOT taskTick = 0
+            // o anterior sai de cena (quem ainda o usa tem referencia propria)
+            GET_CLEO_SHARED_VAR CFG_VAR_CACHE_H tmpInt
+            IF NOT tmpInt = 0
+                REMOVE_SPECIAL_MODEL tmpInt
+            ENDIF
+            SET_CLEO_SHARED_VAR CFG_VAR_CACHE_H taskTick
+            SET_CLEO_SHARED_VAR CFG_VAR_CACHE_K loadTick
+            SET_CLEO_SHARED_VAR CFG_VAR_SPECIAL taskTick
+        ENDIF
+    ENDIF
+    RETURN
+
+    // Hash de uma string. Entrada: stuckTick = ponteiro, loadTick = hash ate
+    // agora. Saida: loadTick. Rascunho: tmpInt, dt.
+bbg_hash:
+    dt = 0
+    READ_MEMORY stuckTick 1 0 tmpInt
+    WHILE NOT tmpInt = 0
+    AND dt < 64
+        loadTick = loadTick * 31
+        loadTick = loadTick + tmpInt
+        stuckTick = stuckTick + 1
+        dt = dt + 1
+        READ_MEMORY stuckTick 1 0 tmpInt
+    ENDWHILE
     RETURN
 
     // =======================================================================
@@ -444,8 +657,19 @@ bbg_make_box:
     IF NOT DOES_CHAR_EXIST pedBox
         RETURN
     ENDIF
-    GOSUB bbg_box_model              // nextAudioTick = objeto escolhido no ini
-    CREATE_RENDER_OBJECT_TO_CHAR_BONE pedBox nextAudioTick CFG_BOX_BONE boxOX boxOY boxOZ boxRX boxRY boxRZ objBox
+    // 1) caixa por ARQUIVO (DFF/TXD solto em CLEO\BoomboxGuy\), se houver.
+    //    O render object ganha sua propria referencia ao modelo especial
+    //    (CLEO+ conta), entao ele sobrevive ate o ped ser apagado.
+    GET_CLEO_SHARED_VAR CFG_VAR_SPECIAL dt
+    IF NOT dt = 0
+        CREATE_RENDER_OBJECT_TO_CHAR_BONE_FROM_SPECIAL pedBox dt CFG_BOX_BONE boxOX boxOY boxOZ boxRX boxRY boxRZ objBox
+    ENDIF
+    // 2) caixa de modelo do jogo (ID/nome registrado, ou o padrao). Tambem e
+    //    a reserva se a de arquivo nao puder ser criada.
+    IF objBox = 0
+        GOSUB bbg_box_model          // nextAudioTick = objeto escolhido no ini
+        CREATE_RENDER_OBJECT_TO_CHAR_BONE pedBox nextAudioTick CFG_BOX_BONE boxOX boxOY boxOZ boxRX boxRY boxRZ objBox
+    ENDIF
     IF NOT objBox = 0
         SET_RENDER_OBJECT_SCALE objBox CFG_BOX_SCALE CFG_BOX_SCALE CFG_BOX_SCALE
     ENDIF
@@ -1373,6 +1597,19 @@ bbg_ini_load:
             RETURN
         ENDIF
     ENDIF
+    IF flag = 0
+        // releitura completa: esquece a lista de peds, o texto do model=
+        // de [Ped] e o nome da caixa por arquivo - o que o ini trouxer agora
+        // e o que vale.
+        dt = bufPath + CFG_MEM_PEDTXT
+        WRITE_MEMORY dt 1 0 0
+        dt = bufPath + CFG_MEM_DFF
+        WRITE_MEMORY dt 1 0 0
+        dt = bufPath + CFG_MEM_TXD
+        WRITE_MEMORY dt 1 0 0
+        SET_CLEO_SHARED_VAR CFG_VAR_PEDN 0
+        SET_CLEO_SHARED_VAR CFG_VAR_SECT 0
+    ENDIF
     IF NOT OPEN_FILE "CLEO\BoomboxGuy\BoomboxGuy.ini" "r" tmpInt
         IF flag = 0
             GOSUB bbg_ini_write      // primeira vez: cria o arquivo
@@ -1416,6 +1653,19 @@ bbg_ini_load:
     //   simplesmente nao mexem em nada)
     // -----------------------------------------------------------------------
 bbg_ini_line:
+    // ---- cabecalho de secao? "[Caixa]" liga o modo caixa, qualquer outra
+    //      ("[Ped]", "[Som]") desliga ----
+    tmpInt = 0
+    SCAN_STRING $bufPath " [%n" dt tmpInt
+    IF tmpInt > 0
+        SET_CLEO_SHARED_VAR CFG_VAR_SECT 0
+        tmpInt = 0
+        SCAN_STRING $bufPath " [%*[cC]aixa%n" dt tmpInt
+        IF tmpInt > 0
+            SET_CLEO_SHARED_VAR CFG_VAR_SECT 1
+        ENDIF
+        RETURN
+    ENDIF
     SCAN_STRING $bufPath " %*[pP]osX%*[^-.0-9]%f" dt boxOX
     SCAN_STRING $bufPath " %*[pP]osY%*[^-.0-9]%f" dt boxOY
     SCAN_STRING $bufPath " %*[pP]osZ%*[^-.0-9]%f" dt boxOZ
@@ -1424,54 +1674,174 @@ bbg_ini_line:
     SCAN_STRING $bufPath " %*[rR]otZ%*[^-.0-9]%f" dt boxRZ
 
     // -----------------------------------------------------------------------
-    //  model= <nome do DFF ou ID numerico>
+    //  txd= <nome do TXD>   (so em [Caixa]; so vale para a caixa por ARQUIVO)
+    //     TXD solto em CLEO\BoomboxGuy\ com outro nome que o do DFF. Sem esta
+    //     linha, o TXD tem o mesmo nome do DFF (radio.dff + radio.txd).
+    // -----------------------------------------------------------------------
+    loadTick = 0
+    SCAN_STRING $bufPath " %*[tT]xd%*[^A-Za-z0-9_]%n%c" dt nextAudioTick loadTick
+    IF dt = 1
+        GET_CLEO_SHARED_VAR CFG_VAR_SECT tmpInt
+        IF tmpInt = 1
+            nextAudioTick = bufPath + nextAudioTick      // inicio do nome
+            stuckTick = 0
+            SCAN_STRING $nextAudioTick "%*[A-Za-z0-9_]%n" dt stuckTick
+            IF stuckTick > 0
+            AND stuckTick <= CFG_NAME_MAX
+                tmpInt = nextAudioTick + stuckTick
+                WRITE_MEMORY tmpInt 1 0 0                // fecha a string aqui
+                dt = bufPath + CFG_MEM_TXD
+                STRING_FORMAT dt "%s" $nextAudioTick
+            ENDIF
+        ENDIF
+        RETURN
+    ENDIF
+
+    // -----------------------------------------------------------------------
+    //  model= <nome do DFF ou ID numerico>   (ou uma LISTA separada por virgula)
     //     Em [Ped] escolhe a skin do NPC, em [Caixa] o objeto da caixa. Quem
     //     decide qual e qual e o TIPO do modelo (0E7F): pedestre vira NPC, o
     //     resto vira objeto na mao dele. Assim a linha funciona em qualquer
     //     secao e um modelo de pedestre nunca vai parar na caixa (nem um
     //     objeto no lugar do NPC).
-    //  Como funciona: o "%n" do scanner devolve em que caractere o valor
-    //  comeca. Se o valor comeca com digito, e ID; se nao, cortamos a string
-    //  no fim do nome (tirando fim de linha, espacos e comentario), deixamos
-    //  em minusculas (o nome no jogo e minusculo) e entregamos para o jogo
-    //  procurar (0E9C, que cobre modelo de mod/ModLoader).
-    //  Qualquer coisa estranha e ignorada: o que estava antes continua valendo.
+    //     Lista: "model=wmybu,male01,fam1,bfori" - cada item valido de
+    //     pedestre entra no sorteio do BOOBOX (veja bbg_pick_ped).
+    //     Em [Caixa], um NOME que o jogo nao conhece (sem ID, fora de qualquer
+    //     .ide) vira o nome de um DFF+TXD em CLEO\BoomboxGuy\ (LOAD_SPECIAL_MODEL).
     // -----------------------------------------------------------------------
     loadTick = 0
     SCAN_STRING $bufPath " %*[mM]odel%*[^A-Za-z0-9_]%n%c" dt nextAudioTick loadTick
     IF dt = 1
         nextAudioTick = bufPath + nextAudioTick      // inicio do valor
-        IF loadTick > 47
-        AND loadTick < 58
-            // ---- ID numerico ----
-            SCAN_STRING $bufPath " %*[mM]odel%*[^0-9-]%d" dt loadTick
-        ELSE
-            // ---- nome do DFF ----
-            loadTick = -1                            // -1 = nao achou nada
-            tmpInt = 0                               // (se o scan falhar, nao mexe)
-            SCAN_STRING $bufPath " %*[mM]odel%*[^A-Za-z0-9_]%*[A-Za-z0-9_]%n" dt tmpInt
-            IF tmpInt > 0
-                tmpInt = bufPath + tmpInt            // fim do nome
-                WRITE_MEMORY tmpInt 1 0 0            // fecha a string aqui
-                SET_STRING_LOWER nextAudioTick       // low_hi_fi_3, male01...
-                IF GET_MODEL_BY_NAME $nextAudioTick tmpInt
-                    loadTick = tmpInt
-                ENDIF
-            ENDIF
-        ENDIF
-        // ---- existe? e de que tipo? ----
-        IF loadTick > -1
-            GET_MODEL_TYPE loadTick tmpInt
-            IF tmpInt = MODEL_TYPE_PED
-                pedModel = loadTick                  // pedestre: e o NPC
-            ELSE
-                IF tmpInt > MODEL_TYPE_INVALID
-                AND NOT tmpInt = MODEL_TYPE_VEHICLE
-                    SET_CLEO_SHARED_VAR CFG_VAR_BOX loadTick   // o resto: caixa
-                ENDIF
-            ENDIF
-        ENDIF
+        GOSUB bbg_ini_model
     ENDIF
+    RETURN
+
+    // -----------------------------------------------------------------------
+    //  Le os itens de um model=. Entrada: nextAudioTick = inicio do valor (nao
+    //  mexe nele). Rascunho fixo durante o laco:
+    //     farTick = inicio do item   stuckTick = tamanho do item
+    //     taskTick = proximo item (0 = acabou)   loadTick = id resolvido
+    //  Um item e ou ID (comeca com digito) ou nome (letras, digitos, _).
+    //  Como funciona: o \"%n\" do scanner devolve quantos caracteres foram
+    //  lidos. Para o nome, acha-se primeiro a virgula seguinte, depois corta-se
+    //  a string no fim do item (WRITE_MEMORY 0), deixa em minusculas (o nome no
+    //  jogo e minusculo) e entrega ao jogo para procurar (0E9C, que cobre
+    //  modelo de mod/ModLoader). Qualquer coisa estranha para o laco: o que
+    //  estava antes continua valendo.
+    // -----------------------------------------------------------------------
+bbg_ini_model:
+    // guarda o texto original dos itens de [Ped] (para o ini_write regravar a
+    // lista do jeito que o jogador escreveu). Cortado no fim do laco.
+    GET_CLEO_SHARED_VAR CFG_VAR_SECT tmpInt
+    IF NOT tmpInt = 1
+        dt = bufPath + CFG_MEM_PEDTXT
+        STRING_FORMAT dt "%s" $nextAudioTick
+    ENDIF
+
+    farTick = nextAudioTick
+    taskTick = 1
+    WHILE NOT taskTick = 0
+        taskTick = 0
+        // pula os espacos antes do item
+        stuckTick = 0
+        SCAN_STRING $farTick " %n" dt stuckTick
+        farTick = farTick + stuckTick
+        // mede o item
+        READ_MEMORY farTick 1 0 tmpInt
+        loadTick = -1
+        stuckTick = 0
+        IF tmpInt > 47
+        AND tmpInt < 58
+            SCAN_STRING $farTick "%d%n" dt loadTick stuckTick      // ID numerico
+        ELSE
+            SCAN_STRING $farTick "%*[A-Za-z0-9_]%n" dt stuckTick   // nome
+        ENDIF
+        IF stuckTick > 0
+            // ha outro item depois? (antes de cortar a string)
+            tmpInt = farTick + stuckTick
+            SCAN_STRING $tmpInt " ,%n" dt taskTick
+            IF taskTick > 0
+                taskTick = taskTick + tmpInt
+            ENDIF
+            // ---- resolve o item ----
+            READ_MEMORY farTick 1 0 tmpInt
+            IF tmpInt < 48
+            OR tmpInt > 57
+                // nome: corta no fim, minusculo, o jogo procura (se conhece, e o ID)
+                tmpInt = farTick + stuckTick
+                WRITE_MEMORY tmpInt 1 0 0
+                SET_STRING_LOWER farTick
+                IF GET_MODEL_BY_NAME $farTick tmpInt
+                    loadTick = tmpInt
+                ELSE
+                    // O jogo nao conhece o nome. Em [Caixa], e a caixa por
+                    // ARQUIVO (DFF+TXD em CLEO\BoomboxGuy\); em [Ped], nao ha
+                    // o que fazer (skin de ped precisa de ID) e o item e ignorado.
+                    GET_CLEO_SHARED_VAR CFG_VAR_SECT tmpInt
+                    IF tmpInt = 1
+                    AND stuckTick <= CFG_NAME_MAX
+                        dt = bufPath + CFG_MEM_DFF
+                        STRING_FORMAT dt "%s" $farTick
+                        tmpInt = 0
+                        SET_CLEO_SHARED_VAR CFG_VAR_BOX tmpInt    // o ultimo item vale
+                    ENDIF
+                ENDIF
+            ENDIF
+            // ---- existe? e de que tipo? ----
+            IF loadTick > -1
+            AND loadTick < 20000
+                GET_MODEL_TYPE loadTick tmpInt
+                IF tmpInt = MODEL_TYPE_PED
+                    GOSUB bbg_ped_add                // pedestre: entra no sorteio do NPC
+                ELSE
+                    IF tmpInt > MODEL_TYPE_INVALID
+                    AND NOT tmpInt = MODEL_TYPE_VEHICLE
+                        SET_CLEO_SHARED_VAR CFG_VAR_BOX loadTick   // o resto: caixa
+                        dt = bufPath + CFG_MEM_DFF
+                        WRITE_MEMORY dt 1 0 0        // e nao ha mais caixa por arquivo
+                    ENDIF
+                ENDIF
+            ENDIF
+            IF NOT taskTick = 0
+                farTick = taskTick
+            ENDIF
+        ENDIF
+    ENDWHILE
+
+    // corta o texto guardado no fim do ultimo item (sem fim de linha nem
+    // comentario)
+    GET_CLEO_SHARED_VAR CFG_VAR_SECT tmpInt
+    IF NOT tmpInt = 1
+        tmpInt = farTick + stuckTick
+        tmpInt = tmpInt - nextAudioTick
+        dt = bufPath + CFG_MEM_PEDTXT
+        dt = dt + tmpInt
+        WRITE_MEMORY dt 1 0 0
+    ENDIF
+    RETURN
+
+    // Acrescenta o ped 'loadTick' a lista do sorteio - se o arquivo dele
+    // esta no jogo (um nome de IDE sem o DFF no IMG nunca carregaria) e ainda
+    // ha espaco. Rascunho: dt, tmpInt.
+bbg_ped_add:
+    IF NOT IS_MODEL_IN_CDIMAGE loadTick
+        RETURN
+    ENDIF
+    IF bufPath = 0
+        RETURN
+    ENDIF
+    GET_CLEO_SHARED_VAR CFG_VAR_PEDN dt
+    IF dt >= CFG_PED_MAX
+        RETURN
+    ENDIF
+    // conta um, e grava o ID na posicao (mem + PEDS + 4 * contagem antiga)
+    tmpInt = dt + 1
+    SET_CLEO_SHARED_VAR CFG_VAR_PEDN tmpInt
+    dt = dt * 4
+    dt = dt + bufPath
+    dt = dt + CFG_MEM_PEDS
+    WRITE_MEMORY dt 4 loadTick 0
     RETURN
 
     // -----------------------------------------------------------------------
@@ -1501,22 +1871,47 @@ bbg_ini_write:
         WRITE_FORMATTED_STRING_TO_FILE tmpInt "; aparencia do NPC: nome do DFF de um PEDESTRE (ex.: male01, wmybu,%c" 10
         WRITE_FORMATTED_STRING_TO_FILE tmpInt "; bmycr) ou o ID (ex.: 7). Serve skin vanilla ou de mod (ModLoader%c" 10
         WRITE_FORMATTED_STRING_TO_FILE tmpInt "; incluido). Se o nome nao existir, o NPC usa o modelo padrao.%c" 10
-        GET_MODEL_NAME_POINTER pedModel dt
-        IF dt = 0
-            WRITE_FORMATTED_STRING_TO_FILE tmpInt "model=%d%c" pedModel 10
-        ELSE
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "; Pode ser uma LISTA separada por virgula: a cada BOOBOX o script%c" 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "; sorteia uma (ex.: model=wmybu,male01,fam1,bfori). Ate %d skins.%c" CFG_PED_MAX 10
+        dt = bufPath + CFG_MEM_PEDTXT
+        READ_MEMORY dt 1 0 tries
+        IF tries > 0
+            // o texto do jogador, do jeito que ele escreveu (lista inclusa)
             WRITE_FORMATTED_STRING_TO_FILE tmpInt "model=%s%c" $dt 10
+        ELSE
+            GET_MODEL_NAME_POINTER pedModel dt
+            IF dt = 0
+                WRITE_FORMATTED_STRING_TO_FILE tmpInt "model=%d%c" pedModel 10
+            ELSE
+                WRITE_FORMATTED_STRING_TO_FILE tmpInt "model=%s%c" $dt 10
+            ENDIF
         ENDIF
         WRITE_FORMATTED_STRING_TO_FILE tmpInt "[Caixa]%c" 10
         WRITE_FORMATTED_STRING_TO_FILE tmpInt "; objeto da caixa: nome do DFF de um OBJETO (ex.: low_hi_fi_3)%c" 10
         WRITE_FORMATTED_STRING_TO_FILE tmpInt "; ou o ID (ex.: 2226). Qualquer objeto do jogo serve. Se o nome nao%c" 10
         WRITE_FORMATTED_STRING_TO_FILE tmpInt "; existir (ou o modelo nao for um objeto), a caixa usa o padrao.%c" 10
-        GOSUB bbg_box_model
-        GET_MODEL_NAME_POINTER nextAudioTick dt
-        IF dt = 0
-            WRITE_FORMATTED_STRING_TO_FILE tmpInt "model=%d%c" nextAudioTick 10
-        ELSE
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "; Objeto que NAO esta em nenhum .ide (sem ID): ponha o DFF e o TXD%c" 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "; soltos na pasta CLEO\BoomboxGuy\ e escreva aqui o nome deles, sem%c" 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "; extensao (radio.dff + radio.txd = model=radio). Se o TXD tiver outro%c" 10
+        WRITE_FORMATTED_STRING_TO_FILE tmpInt "; nome, acrescente a linha txd=nomedotxd. Acerte a pose com BBGUYTUNE.%c" 10
+        dt = bufPath + CFG_MEM_DFF
+        READ_MEMORY dt 1 0 tries
+        IF tries > 0
+            // caixa por arquivo (LOAD_SPECIAL_MODEL): grava o nome dela
             WRITE_FORMATTED_STRING_TO_FILE tmpInt "model=%s%c" $dt 10
+            dt = bufPath + CFG_MEM_TXD
+            READ_MEMORY dt 1 0 tries
+            IF tries > 0
+                WRITE_FORMATTED_STRING_TO_FILE tmpInt "txd=%s%c" $dt 10
+            ENDIF
+        ELSE
+            GOSUB bbg_box_model
+            GET_MODEL_NAME_POINTER nextAudioTick dt
+            IF dt = 0
+                WRITE_FORMATTED_STRING_TO_FILE tmpInt "model=%d%c" nextAudioTick 10
+            ELSE
+                WRITE_FORMATTED_STRING_TO_FILE tmpInt "model=%s%c" $dt 10
+            ENDIF
         ENDIF
         WRITE_FORMATTED_STRING_TO_FILE tmpInt "posX=%g%c" boxOX 10
         WRITE_FORMATTED_STRING_TO_FILE tmpInt "posY=%g%c" boxOY 10

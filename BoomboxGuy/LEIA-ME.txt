@@ -48,12 +48,15 @@ INSTALACAO
              som2.mp3
              ...
              som50.mp3
+             radio.dff            <- (opcional) caixa por arquivo, sem ID
+             radio.txd            <- (opcional) idem
 
 3) Entre no jogo e digite o cheat BOOBOX.
 
 Nao precisa de DFF/TXD nenhum: por padrao a caixa e o objeto nativo do jogo
 2226 (low_hi_fi_3) e o NPC e o male01. A aparencia do NPC e o objeto da
-caixa se escolhem no BoomboxGuy.ini - veja mais abaixo.
+caixa se escolhem no BoomboxGuy.ini - veja mais abaixo. Para uma caixa que
+NAO esta em nenhum .ide (sem ID), veja "CAIXA POR ARQUIVO" mais abaixo.
 
 
 MUSICAS
@@ -124,13 +127,21 @@ onde ela fica presa na mao e o volume:
                       (inclusive as do ModLoader). Se o nome nao existir (ou
                       nao for de pedestre), o NPC usa o modelo padrao - sem
                       aviso e sem erro.
+                      Pode ser uma LISTA separada por virgula (nomes e IDs):
+                          model=wmybu,male01,fam1,bfori
+                      A cada BOOBOX o script sorteia uma e evita repetir a
+                      anterior. Item invalido e ignorado. Ate 16 skins.
     [Caixa]
     model=low_hi_fi_3 objeto da caixa: nome do DFF de um OBJETO ou o ID
                       numerico. Ex.: low_hi_fi_3 (= 2226, o padrao), e
                       qualquer outro objeto do jogo - inclusive de mod.
                       Se o nome nao existir, se o modelo nao for um objeto
                       (pedestre e veiculo nao valem) ou se o arquivo dele
-                      nao estiver no jogo, a caixa usa o low_hi_fi_3.
+                      nao estiver no jogo, a caixa usa o low_hi_fi_3 -
+                      a nao ser que exista o arquivo nome.dff + nome.txd
+                      em CLEO/BoomboxGuy/ (veja CAIXA POR ARQUIVO).
+    txd=...           (opcional) nome do TXD da caixa por arquivo, quando
+                      ele nao tem o mesmo nome do DFF.
     posX=0.40      posicao da caixa na mao (eixos do osso da mao!)
     posY=0.02
     posZ=0.02
@@ -147,6 +158,7 @@ proxima vez que voce chamar o cheat (BOOBOX rele o arquivo inteiro).
 
 Quem decide o que e skin de NPC e o que e objeto da caixa e o TIPO do
 modelo, nao a secao do arquivo: pedestre vira o NPC, objeto vira a caixa.
+(A caixa por arquivo, abaixo, so vale dentro de [Caixa].)
 
 Use PONTO decimal (0.5) e nao virgula. Comentarios comecam com ; ou #.
 Chave escrita errado, linha em branco ou valor invalido sao simplesmente
@@ -155,6 +167,30 @@ erro nem trava. Chave com a primeira letra maiuscula (Model=, PosX=) tambem
 funciona, e pode ter espacos em volta do sinal de igual.
 
 Para voltar tudo ao padrao, apague o arquivo: o script cria outro.
+
+
+CAIXA POR ARQUIVO (objeto sem ID)
+---------------------------------
+O model= por NOME so acha o que o jogo conhece: um modelo registrado num
+.ide (inclusive o do ModLoader). Um DFF que nao esta em nenhum .ide nao tem
+ID e o nome nao e encontrado.
+
+Para esse caso, use arquivos soltos:
+
+  1) Coloque radio.dff e radio.txd nesta pasta (CLEO/BoomboxGuy/).
+  2) No BoomboxGuy.ini, em [Caixa]:      model=radio
+     (sem extensao; se o TXD tiver outro nome, acrescente  txd=nomedotxd)
+  3) Digite BOOBOX. A pose da caixa na mao e a da caixa original: acerte a
+     do seu modelo com o BBGUYTUNE (abaixo) e salve.
+
+  * Prioridade: nome/ID que o jogo conhece > arquivo nesta pasta > caixa
+    padrao (low_hi_fi_3). Faltou arquivo, o DFF nao abriu ou deu qualquer
+    erro: cai para a proxima, sem aviso.
+  * Precisa dos DOIS arquivos (.dff e .txd). Nome com letras, numeros e _
+    (ate 40 caracteres), sem espacos.
+  * O modelo e carregado uma vez por jogo. Trocou o nome no .ini: vale no
+    proximo BOOBOX. Editou o CONTEUDO do mesmo .dff/.txd: reabra o jogo.
+  * So serve para a CAIXA. Skin de NPC precisa de ID (registre-a num .ide).
 
 
 AJUSTE AO VIVO DA CAIXA (opcional)
@@ -193,6 +229,15 @@ A skin do NPC nao mudou
     O BOOBOX rele o BoomboxGuy.ini: confira o nome do DFF (sem .dff), se o
     modelo existe no jogo e se ele e um PEDESTRE. Nome errado cai no male01
     sem avisar - e sem erro.
+
+A caixa por arquivo (model=radio) nao aparece, sai a caixa padrao
+    Confira se radio.dff E radio.txd estao nesta pasta, se a linha esta em
+    [Caixa] e se o nome tem so letras/numeros/_ (sem .dff). Qualquer falha
+    cai na caixa padrao sem avisar.
+
+So aparece uma skin de NPC, mesmo com lista no [Ped]
+    Cada item precisa ser um PEDESTRE com ID (registrado num .ide) e com o
+    DFF no jogo. Itens invalidos sao ignorados.
 
 A caixa esta torta ou fora da mao
     Use o BBGUYTUNE (veja acima) e salve com DELETE.

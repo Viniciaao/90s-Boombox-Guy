@@ -7,7 +7,7 @@
 <img alt="GTA San Andreas 1.0 US" src="https://img.shields.io/badge/GTA_San_Andreas-1.0_US-2f2f2f?style=for-the-badge">
 <img alt="Requer CLEO 4 + CLEO+ v1.2+" src="https://img.shields.io/badge/requer-CLEO_4_%2B_CLEO%2B_v1.2+-blue?style=for-the-badge">
 <img alt="Feito com gta3script" src="https://img.shields.io/badge/feito_com-gta3script-orange?style=for-the-badge">
-<img alt="Versão v6.5" src="https://img.shields.io/badge/vers%C3%A3o-v6.5-success?style=for-the-badge">
+<img alt="Versão v6.6" src="https://img.shields.io/badge/vers%C3%A3o-v6.6-success?style=for-the-badge">
 
 **Um NPC "cara do som" aparece longe de você, vem correndo com a caixa de som<br>
 e passa a te acompanhar com música em áudio 3D — na rua, no interior<br>
@@ -123,13 +123,20 @@ GTA San Andreas/
       som2.mp3
       ...
       som50.mp3
+      radio.dff              <- (opcional) caixa por arquivo, sem ID
+      radio.txd              <- (opcional) idem
 ```
 
 Não é necessário nenhum arquivo DFF/TXD: por padrão a caixa de som é o
-**objeto nativo do jogo** `2226 (low_hi_fi_3)`. Se quiser outra caixa, é só
-apontar `[Caixa] model=` para o **nome do DFF** de qualquer objeto que já
-esteja no seu jogo (vanilla ou de mod) — nada de `.dff`/`.txd` solto na
-pasta do CLEO.
+**objeto nativo do jogo** `2226 (low_hi_fi_3)`. Se quiser outra caixa, há dois
+caminhos (detalhes em [Modelo da caixa: por ID ou por arquivo](#-modelo-da-caixa-por-id-ou-por-arquivo)):
+
+- **O objeto já existe no jogo** (vanilla, ou registrado num `.ide`, inclusive
+  o de ModLoader): aponte `[Caixa] model=` para o **nome do DFF** ou o ID.
+- **O objeto não está em nenhum `.ide`** (sem ID): ponha o `.dff` e o `.txd`
+  soltos em `CLEO/BoomboxGuy/` (ex.: `radio.dff` + `radio.txd`) e escreva
+  `model=radio`. O script lê os arquivos direto do disco com o
+  `LOAD_SPECIAL_MODEL` do CLEO+.
 
 Na primeira vez que o jogo abre, o script cria também o
 `CLEO/BoomboxGuy/BoomboxGuy.ini` (modelo do NPC, posição/rotação da caixa e
@@ -187,7 +194,12 @@ com `./build.sh` (ou `make`).
 | `CFG_SND_OFF_X/Y/Z` | `0.25 / 0.10 / 0.75` | Onde o som 3D nasce em relação ao corpo |
 | `CFG_VOLUME` | `1.0` | Volume padrão da música (**o `.ini` pode mudar**) |
 | `CFG_MAX_TRACKS` | `50` | Número máximo de faixas que o script procura (`som1..som50`) |
-| `CFG_PATH_SIZE` | `64` | Tamanho do buffer do caminho do MP3 |
+| `CFG_PATH_SIZE` | `128` | Tamanho do buffer de linha do `.ini` / caminho do MP3 (cabe uma lista de uns 15 peds) |
+| `CFG_PED_MAX` | `16` | Quantos peds cabem na lista `[Ped] model=a,b,c` |
+| `CFG_NAME_MAX` | `40` | Maior nome de arquivo (sem extensão) aceito na caixa por arquivo |
+| `CFG_MEM_*` | — | Mapa do bloco de memória único do script (linha do `.ini`, ids dos peds, nomes do DFF/TXD, caminhos) — fica em `bufPath` |
+| `CFG_VAR_SECT` / `_PEDN` / `_LASTPED` | `1017` / `1016` / `1015` | Vars do CLEO: seção do `.ini` que está sendo lida, nº de peds na lista e último ped sorteado |
+| `CFG_VAR_SPECIAL` / `_CACHE_H` / `_CACHE_K` | `1014` / `1013` / `1012` | Vars do CLEO: handle do modelo especial em uso, e o cache (handle + hash dos nomes) do último carregado |
 | `CFG_CLEOPLUS_MIN` | `16908288` (`0x01020000` = v1.2.0.0) | Versão mínima do CLEO+ aceita |
 | `CFG_SPAWN_BACK` / `CFG_SPAWN_SIDE` | `-45.0` | Distâncias de spawn (negativo em Y = atrás do player) |
 | `CFG_SPAWN_MID` / `CFG_SPAWN_NEAR` | `-30.0` / `-15.0` | Spawn mais perto, se os pontos acima não tiverem chão |
@@ -223,11 +235,17 @@ primeira vez que o jogo abre:
 ; aparencia do NPC: nome do DFF de um PEDESTRE (ex.: male01, wmybu,
 ; bmycr) ou o ID (ex.: 7). Serve skin vanilla ou de mod (ModLoader
 ; incluido). Se o nome nao existir, o NPC usa o modelo padrao.
+; Pode ser uma LISTA separada por virgula: a cada BOOBOX o script
+; sorteia uma (ex.: model=wmybu,male01,fam1,bfori). Ate 16 skins.
 model=male01
 [Caixa]
 ; objeto da caixa: nome do DFF de um OBJETO (ex.: low_hi_fi_3)
 ; ou o ID (ex.: 2226). Qualquer objeto do jogo serve. Se o nome nao
 ; existir (ou o modelo nao for um objeto), a caixa usa o padrao.
+; Objeto que NAO esta em nenhum .ide (sem ID): ponha o DFF e o TXD
+; soltos na pasta CLEO\BoomboxGuy\ e escreva aqui o nome deles, sem
+; extensao (radio.dff + radio.txd = model=radio). Se o TXD tiver outro
+; nome, acrescente a linha txd=nomedotxd. Acerte a pose com BBGUYTUNE.
 model=low_hi_fi_3
 posX=0.40
 posY=0.02
@@ -252,11 +270,30 @@ Como funciona:
   **pedestre**: se o nome apontar para um objeto, o NPC continua com o
   modelo padrão. Se o nome não existir (typo, mod removido), o NPC
   simplesmente usa `CFG_PED_MODEL`, **sem aviso e sem erro**.
+- **Variações de NPC (lista)** — `model=` aceita **vários itens separados
+  por vírgula**, misturando nomes e IDs:
+
+  ```ini
+  [Ped]
+  model=wmybu,male01,fam1,bfori
+  ```
+
+  A cada `BOOBOX` o script **sorteia uma** das skins da lista e **evita
+  repetir a anterior**. Itens inválidos (nome que o jogo não conhece, modelo
+  que não é pedestre, DFF ausente do jogo) são **ignorados** sem afetar os
+  outros; se nenhum item servir, vale o `CFG_PED_MODEL`. Cabem até 16 skins
+  (`CFG_PED_MAX`). O texto da linha é preservado quando o `BBGUYTUNE` regrava
+  o `.ini`. Skin de ped **precisa de ID** (registrada num `.ide`): o jogo não
+  cria pedestre a partir de um DFF solto.
 - **`[Caixa] model`** — o **objeto da caixa de som**. Aqui é o contrário:
   só vale para **objeto** (aceita os tipos de objeto do jogo: atômico,
-  clump, com hora do dia e LOD), nunca pedestre nem veículo. Se o nome não existir, for um ped ou
-  um carro, ou o arquivo do modelo não estiver no jogo, a caixa volta para
-  `CFG_BOX_MODEL` (o `low_hi_fi_3` original), **sem aviso e sem erro**.
+  clump, com hora do dia e LOD), nunca pedestre nem veículo. Se o nome não
+  existir, for um ped ou um carro, ou o arquivo do modelo não estiver no
+  jogo, a caixa volta para `CFG_BOX_MODEL` (o `low_hi_fi_3` original),
+  **sem aviso e sem erro** — a não ser que exista um `nome.dff` + `nome.txd`
+  em `CLEO/BoomboxGuy/`: aí vale a **caixa por arquivo** (próxima seção).
+- **`[Caixa] txd`** — (opcional) nome do TXD da caixa por arquivo, quando ele
+  não tem o mesmo nome do DFF.
 - **`[Caixa] posX/posY/posZ` e `rotX/rotY/rotZ`** — onde a caixa fica presa
   na mão do NPC. O deslocamento usa os eixos **do osso da mão** (não são os eixos do mundo, por isso os números
   parecem estranhos e a rotação em Y é `-90`). Os valores acima já são um
@@ -269,7 +306,9 @@ Como funciona:
   que quiser, salve, e digite `BOOBOX` no jogo.
 - Quem decide o que é skin de NPC e o que é objeto da caixa é o **tipo** do
   modelo, não a seção: `model=` funciona em qualquer lugar do arquivo. Em
-  `[Ped]` use um pedestre; em `[Caixa]` use um objeto.
+  `[Ped]` use um pedestre; em `[Caixa]` use um objeto. (Exceção: a caixa **por
+  arquivo** só vale em `[Caixa]`, porque um nome sem ID não tem tipo para o
+  script conferir.)
 - Valores inválidos, chaves escritas errado, linhas em branco e comentários
   (linhas começando com `;` ou `#`) são simplesmente ignorados: a chave que
   não for encontrada continua com o valor padrão, **nunca dá erro nem
@@ -277,6 +316,46 @@ Como funciona:
   `Model`) também são aceitas, e pode ter espaços em volta do `=`.
 - Para voltar tudo ao padrão, é só apagar o arquivo: o script cria outro na
   próxima vez que abrir o jogo (com `model=male01`).
+
+### 📦 Modelo da caixa: por ID ou por arquivo
+
+**Por nome/ID (`model=low_hi_fi_3` ou `model=2226`)** — o nome é procurado
+pelo jogo com o opcode `0E9C` (`GET_MODEL_BY_NAME`), que consulta a tabela de
+modelos **registrados** (`.ide`, inclusive o de ModLoader/fastman92). Ou seja:
+**só funciona se o modelo tiver um ID**. Um DFF que não está em nenhum `.ide`
+não aparece nessa tabela, e o nome não é resolvido.
+
+**Por arquivo (`model=radio`)** — para o objeto **sem ID**. O script usa o
+`LOAD_SPECIAL_MODEL` do CLEO+, que lê um DFF e um TXD direto do disco e
+devolve um *modelo especial* (sem ID, fora do streaming do jogo); o
+`CREATE_RENDER_OBJECT_TO_CHAR_BONE_FROM_SPECIAL` prende esse modelo na mão do
+NPC. Como usar:
+
+1. Coloque `radio.dff` e `radio.txd` em `CLEO/BoomboxGuy/`.
+2. No `.ini`, em `[Caixa]`: `model=radio` (sem extensão). Se o TXD tiver outro
+   nome, acrescente `txd=nomedotxd`.
+3. Digite `BOOBOX`. A pose (`posX…rotZ`) é a **da caixa original** — use o
+   `BBGUYTUNE` para acertar a do seu modelo e salve.
+
+Regras:
+
+- **Ordem de prioridade**: nome/ID que o jogo conhece → arquivo em
+  `CLEO/BoomboxGuy/` → caixa padrão (`low_hi_fi_3`). Se faltar um dos dois
+  arquivos, o DFF não abrir ou der qualquer erro, cai para a próxima opção,
+  **sem aviso**.
+- Os **dois arquivos são conferidos antes** de chamar o CLEO+: o
+  `LOAD_SPECIAL_MODEL` com TXD ausente/errado é do tipo que trava o jogo.
+- O modelo é carregado **uma vez** e reaproveitado nos `BOOBOX` seguintes
+  (o comando recarrega o TXD por cima do anterior a cada chamada, vazando
+  memória). Se você trocar o nome no `.ini`, o novo é carregado no próximo
+  `BOOBOX`; se você **editar o conteúdo** do mesmo `.dff`/`.txd`, reabra o
+  jogo.
+- **Só para a caixa.** Skin de pedestre precisa de ID: o jogo não cria ped a
+  partir de um DFF solto. Para skin de mod, registre-a num `.ide` (ModLoader
+  faz isso com a pasta certa) e use o nome/ID em `[Ped]`.
+- Requer CLEO+ v1.2 (o mesmo que o script já exige). O DFF precisa ter ao
+  menos um atômico (qualquer DFF de objeto comum tem). Nomes de arquivo usam
+  letras, números e `_` (até 40 caracteres).
 
 ### 🎛️ Ajustando a caixa ao vivo (cheat `BBGUYTUNE`)
 
@@ -348,6 +427,8 @@ gta3sc --config=gtasa --guesser --cs -fcleo -fno-entity-tracking \
 | "Nenhuma musica encontrada" | Não existe nenhum `som*.mp3` em `CLEO/BoomboxGuy/`. Confira o nome dos arquivos. |
 | Digito `BOOBOX` e nada acontece | O `BoomboxGuy.cs` está em `CLEO/`? O jogo tem CLEO 4? (Se o CLEO+ faltar, o aviso aparece na tela.) |
 | A skin do NPC não mudou | O `BOOBOX` relê o `.ini`: confira o nome do DFF (sem `.dff`) e se o modelo é um **pedestre**. Nome errado cai no `male01` sem avisar. |
+| Pus `model=radio` e continua saindo o `low_hi_fi_3` | Confira se `radio.dff` **e** `radio.txd` estão em `CLEO/BoomboxGuy/`, se a linha está em `[Caixa]` e se o nome tem só letras/números/`_` (sem `.dff`). Qualquer falha cai na caixa padrão sem aviso. |
+| Só aparece uma skin de NPC mesmo com lista | Os outros itens não foram aceitos: cada nome tem que ser um **pedestre com ID** (registrado em `.ide`) e com o DFF no jogo. Itens inválidos são ignorados. |
 | A caixa está torta ou fora da mão | Use o modo `BBGUYTUNE` (seção acima) e salve com `DELETE`. |
 | A música não toca | Veja o `volume=` no `[Som]` do `.ini` (`0.0` = mudo) e teste outro arquivo. O som sai **da caixa**, em 3D: de longe ele é abafado de propósito. |
 | O NPC ficou para trás | Fugiu de carro/avião sem lugar para ele? Ele volta quando você descer e **pisar no chão**. Travou num canto? O script resolve sozinho em alguns segundos (linha reta e, em último caso, reaparecendo perto). |
@@ -511,6 +592,18 @@ bagunçadas):
   não confere o modelo, e tratar um carro ou uma pessoa como objeto
   derrubaria o jogo. Nome não encontrado, tipo errado ou valor maluco ⇒
   volta para o padrão em silêncio.
+- **Lista de peds e caixa por arquivo**: tudo vive num **único bloco**
+  (`ALLOCATE_MEMORY`) guardado em `bufPath` — o bloco carrega o buffer de
+  linha, os IDs, os nomes e os caminhos. Nada de ponteiro em var compartilhada
+  (a memória alocada pelo CLEO morre com o script e o ponteiro ficaria
+  pendurado quando o jogo recarrega os scripts). Cada item da lista passa
+  pelas mesmas checagens do modelo único (existe, tipo de pedestre, DFF no
+  jogo, ID < 20000) antes de entrar no sorteio. Para a caixa por arquivo:
+  os arquivos são conferidos com `DOES_FILE_EXIST`; o handle do
+  `LOAD_SPECIAL_MODEL` só é usado se veio diferente de zero; o render object
+  tem referência própria do CLEO+ (o modelo especial é contado), então não há
+  ponteiro solto nem `REMOVE_SPECIAL_MODEL` em cima de render object vivo; e
+  se a criação falhar, a caixa do jogo assume na mesma chamada.
 - O loop principal tem `WAIT 0`, e o script volta ao estado inicial se o
   player morrer, se o char sumir do pool, se o NPC morrer ou se for
   dispensado.
@@ -522,6 +615,20 @@ bagunçadas):
 
 ## 📜 Histórico de versões
 
+- **v6.6** — variações de NPC e caixa sem ID:
+  - **Lista de peds**: `[Ped] model=wmybu,male01,fam1,bfori` — a cada
+    `BOOBOX` o script sorteia uma das skins (sem repetir a anterior). Itens
+    inválidos são ignorados; nomes e IDs podem se misturar; até 16.
+  - **Caixa por arquivo (`LOAD_SPECIAL_MODEL`)**: o `model=` por nome só
+    acha o que está registrado num `.ide` (o `0E9C` consulta essa tabela).
+    Para um objeto **sem ID**, `[Caixa] model=radio` (+ `txd=` opcional)
+    carrega `CLEO/BoomboxGuy/radio.dff` + `radio.txd` direto do disco com o
+    `LOAD_SPECIAL_MODEL` do CLEO+ e prende na mão do NPC
+    (`CREATE_RENDER_OBJECT_TO_CHAR_BONE_FROM_SPECIAL`). Cache do modelo
+    carregado, arquivos conferidos antes e caixa padrão como reserva.
+  - O parser do `.ini` agora conhece as **seções** (`[Caixa]`), o buffer de
+    linha subiu de 64 para 128 bytes e o `BBGUYTUNE` regrava a lista de peds
+    e a caixa por arquivo como o jogador escreveu.
 - **v6.5** — ele nunca mais fica plantado:
   - **"Saiu do interior e não segue mais"**: o resgate de quem ficava para
     trás olhava só o estado do motor (`GET_CHAR_MOVE_STATE`). Isso só pega
