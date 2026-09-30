@@ -47,7 +47,7 @@ INSTALACAO
              som1.mp3
              som2.mp3
              ...
-             som50.mp3
+             som999.mp3
              radio.dff            <- (opcional) caixa por arquivo, sem ID
              radio.txd            <- (opcional) idem
 
@@ -61,16 +61,20 @@ NAO esta em nenhum .ide (sem ID), veja "CAIXA POR ARQUIVO" mais abaixo.
 
 MUSICAS
 -------
-Nome dos arquivos: som1.mp3, som2.mp3, ... som50.mp3 (nao precisa ser
+Nome dos arquivos: som1.mp3, som2.mp3, ... som999.mp3 (nao precisa ser
 mp3 - valem OGG, WAV e AIFF tambem, o que o BASS do CLEO abrir).
 
-  * Pode ter de 1 ate 50 musicas. O script CONFERE quais arquivos existem
+  * Pode ter de 1 ate 999 musicas. O script CONFERE quais arquivos existem
     e usa so os que estao na pasta: pode ter so a som1.mp3, ou uma
-    numeracao esburacada (som1, som4, som9), que funciona igual.
+    numeracao esburacada (som1, som4, som9), que funciona igual. O teto
+    (999) e a constante CFG_MAX_TRACKS do BoomboxGuy.sc: para passar dele,
+    mude la e recompile.
   * A ordem e sempre ALEATORIA (nunca sequencial) e o script evita repetir
     a mesma faixa duas vezes seguidas.
   * Quando a musica acaba, ele sorteia outra sozinho.
-  * Pode colocar os arquivos com o jogo aberto: nao precisa reiniciar.
+  * Pode colocar os arquivos com o jogo aberto: nao precisa reiniciar. O
+    script refaz a lista da pasta a cada 10 segundos (e na hora em que uma
+    musica some), entao a faixa nova entra no sorteio sozinho.
   * Se nao achar nenhum arquivo, aparece na tela "nenhuma musica
     encontrada" - e um dos dois unicos avisos do mod (o outro e o de
     CLEO+ faltando). Todo o resto e silencioso.

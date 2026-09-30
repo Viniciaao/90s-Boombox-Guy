@@ -18,10 +18,11 @@
 //  livres, sem arma na mao) e a musica troca na hora - e o "proxima faixa"
 //  do mod, feito no meio do jogo. Soco nao mata ele: a vida volta ao normal.
 //
-//  Musicas: CLEO/BoomboxGuy/som1.mp3 ... som50.mp3
+//  Musicas: CLEO/BoomboxGuy/som1.mp3 ... som999.mp3
 //     O script CONFERE quais arquivos existem e usa so os que estao la.
-//     Pode ter 1, 2, 10, 50 - funciona com qualquer quantidade (ate 50),
-//     inclusive com numeracao esburacada (som1, som4, som9...).
+//     Pode ter 1, 2, 10, 999 - funciona com qualquer quantidade (ate 999,
+//     que e o teto da constante CFG_MAX_TRACKS), inclusive com numeracao
+//     esburacada (som1, som4, som9...).
 //     A ordem e sempre aleatoria (nunca sequencial) e evita repetir a
 //     mesma faixa duas vezes seguidas.
 //
@@ -140,6 +141,14 @@ SCRIPT_START
     // MODEL recarrega o TXD por cima do anterior e vaza memoria a cada uso).
     CONST_INT   CFG_VAR_CACHE_H     1013
     CONST_INT   CFG_VAR_CACHE_K     1012
+    // ---- lista das musicas que existem na pasta (veja bbg_scan_tracks) ----
+    // Quantas faixas a ultima varredura achou (0 = nenhuma / ainda nao varreu)
+    // e o relogio (GET_GAME_TIMER) de quando essa varredura aconteceu. Vao
+    // para vars do CLEO pelo mesmo motivo das de cima: as 32 LVARs estao em
+    // uso. As duas sao zeradas no comeco do script, porque a lista em si mora
+    // no bloco de memoria, que e outro a cada vez que o script recomeca.
+    CONST_INT   CFG_VAR_TRACKN      1011
+    CONST_INT   CFG_VAR_TRACKT      1010
     // Osso onde a caixa e presa: 24 = mao direita (BONE_R_HAND no Sanny).
     CONST_INT   CFG_BOX_BONE        24
 
@@ -175,8 +184,14 @@ SCRIPT_START
     CONST_FLOAT CFG_SND_OFF_Z       0.75
     CONST_FLOAT CFG_VOLUME          1.0     // volume padrao (o ini pode mudar)
     CONST_INT   CFG_INI_MAX_LINES   200     // travas de seguranca na leitura do ini
-    // Musicas: som1.mp3 ... somCFG_MAX_TRACKS.mp3 (maximo 50).
-    CONST_INT   CFG_MAX_TRACKS      50
+    // Musicas: som1.mp3 ... somCFG_MAX_TRACKS.mp3. Esse numero e o TETO do
+    // script, nao uma lista obrigatoria: quem tem 3 musicas usa 3. Cada
+    // numero a mais custa um teste de arquivo na varredura da pasta e 4 bytes
+    // no bloco de memoria (veja CFG_MEM_TRACKS) - por isso 999, e nao 100000.
+    CONST_INT   CFG_MAX_TRACKS      999
+    // A pasta e varrida de novo so depois deste tempo (ms). Sem isso cada
+    // "proxima faixa" (soco) pagaria uma varredura inteira.
+    CONST_INT   CFG_TRACK_SCAN_MS   10000
     // Buffer de linha do .ini / caminho da musica. Uma linha "model=a,b,c,d"
     // com varios peds precisa de espaco: 128 cabe uma lista de uns 15 nomes.
     CONST_INT   CFG_PATH_SIZE       128
@@ -190,6 +205,8 @@ SCRIPT_START
     //   320..367  nome do DFF da caixa por arquivo (vazio = nao usa)
     //   368..415  nome do TXD da caixa por arquivo (vazio = igual ao DFF)
     //   416..543  caminhos montados para o LOAD_SPECIAL_MODEL (2 x 64)
+    //   544..4539 numero de cada musica que existe na pasta (4 bytes por uma,
+    //             ate CFG_MAX_TRACKS delas) - e a lista do sorteio
     CONST_INT   CFG_PED_MAX         16      // quantos peds cabem na lista
     CONST_INT   CFG_MEM_PEDS        128
     CONST_INT   CFG_MEM_PEDTXT      192
@@ -197,7 +214,8 @@ SCRIPT_START
     CONST_INT   CFG_MEM_TXD         368
     CONST_INT   CFG_MEM_FILE        416
     CONST_INT   CFG_MEM_FILE2       480
-    CONST_INT   CFG_MEM_SIZE        544
+    CONST_INT   CFG_MEM_TRACKS      544
+    CONST_INT   CFG_MEM_SIZE        4540    // 544 + 4 * CFG_MAX_TRACKS (999)
     CONST_INT   CFG_NAME_MAX        40      // maior nome de arquivo aceito (sem extensao)
     // Versao minima do CLEO+ exigida (0x01020000 = v1.2.0.0).
     CONST_INT   CFG_CLEOPLUS_MIN    16908288
@@ -306,6 +324,12 @@ SCRIPT_START
     // ---------------------------------------------------------------
     GOSUB bbg_check_deps
     GOSUB bbg_alloc_path
+    // A contagem de musicas das vars do CLEO pode ser de outra encarnacao
+    // deste script (o jogo recarrega os scripts ao carregar um save), e a
+    // lista em si mora no bloco de memoria, que acabou de ser reservado de
+    // novo. Zera as duas para a primeira varredura acontecer na hora de tocar.
+    SET_CLEO_SHARED_VAR CFG_VAR_TRACKN 0
+    SET_CLEO_SHARED_VAR CFG_VAR_TRACKT 0
     // le - ou cria, na primeira vez - o arquivo BoomboxGuy.ini
     flag = 0
     GOSUB bbg_ini_load
@@ -1416,41 +1440,101 @@ bbg_build_path:
     RETURN
 
     // =======================================================================
-    //  Sorteia uma faixa que exista (evita repetir a anterior)
-    //  saida: lastTrack (0 = nenhuma faixa encontrada)
+    //  Varre a pasta e guarda o numero de cada som<N>.mp3 que existe
+    //  saida: CFG_VAR_TRACKN = quantas achou (0 = nenhuma) e CFG_VAR_TRACKT =
+    //  quando foi. Rascunho: dt, tries, tmpInt.
+    //
+    //  Por que uma lista: com o teto em CFG_MAX_TRACKS (999), "sortear um
+    //  numero e testar se o arquivo existe" quase nunca cai numa musica de
+    //  quem tem poucas faixas, e o plano B (pegar a primeira que existir)
+    //  acabava tocando sempre a mesma. Varrendo uma vez e guardando os
+    //  numeros, o sorteio vale para todas as faixas de verdade e a hora de
+    //  tocar nao testa arquivo nenhum.
     // =======================================================================
-bbg_pick_track:
-    tmpInt = 0
-    dt = 0
-    WHILE dt < 12
-    AND tmpInt = 0
-        dt = dt + 1
-        // 0209 sorteia de 'min' ate 'max'-1, entao sorteia 0..49 e soma 1
-        GENERATE_RANDOM_INT_IN_RANGE 0 CFG_MAX_TRACKS tries
-        IF tries >= CFG_MAX_TRACKS
-            tries = 0
+bbg_scan_tracks:
+    SET_CLEO_SHARED_VAR CFG_VAR_TRACKN 0
+    IF bufPath = 0
+        GOSUB bbg_alloc_path
+        IF bufPath = 0
+            RETURN
+        ENDIF
+    ENDIF
+    dt = 0                                      // quantas achou
+    tries = 1
+    WHILE tries <= CFG_MAX_TRACKS
+        GOSUB bbg_build_path                    // monta o caminho de 'tries'
+        IF DOES_FILE_EXIST $bufPath
+            // grava o numero na posicao 'dt' da lista (4 bytes por faixa)
+            tmpInt = dt * 4
+            tmpInt = tmpInt + bufPath
+            tmpInt = tmpInt + CFG_MEM_TRACKS
+            WRITE_MEMORY tmpInt 4 tries 0
+            dt = dt + 1
         ENDIF
         tries = tries + 1
-        GOSUB bbg_build_path
-        IF DOES_FILE_EXIST $bufPath
-            IF NOT tries = lastTrack
-                tmpInt = tries
-            ENDIF
-        ENDIF
     ENDWHILE
-    IF tmpInt = 0
-        // numeracao esburacada / azar: varre e pega a primeira que existir
-        tries = 1
-        WHILE tries <= CFG_MAX_TRACKS
-        AND tmpInt = 0
-            GOSUB bbg_build_path
-            IF DOES_FILE_EXIST $bufPath
-                tmpInt = tries
-            ENDIF
-            tries = tries + 1
-        ENDWHILE
+    SET_CLEO_SHARED_VAR CFG_VAR_TRACKN dt
+    GET_GAME_TIMER tmpInt
+    SET_CLEO_SHARED_VAR CFG_VAR_TRACKT tmpInt
+    RETURN
+
+    // =======================================================================
+    //  Sorteia uma faixa da lista (evita repetir a que estava tocando)
+    //  saida: lastTrack (0 = nenhuma faixa encontrada)
+    //  Rascunho: dt, tries, tmpInt.
+    // =======================================================================
+bbg_pick_track:
+    // Lista velha? Varre de novo. Isso vale para a primeira vez, para quem
+    // acabou de por (ou tirar) musicas com o jogo aberto e para o arquivo que
+    // nao abriu na tentativa anterior (bbg_play_track zera a contagem).
+    GET_CLEO_SHARED_VAR CFG_VAR_TRACKN tmpInt
+    IF tmpInt < 1
+        GOSUB bbg_scan_tracks
+    ELSE
+        // A ultima varredura ja faz mais de CFG_TRACK_SCAN_MS? Refaz. (Sem
+        // contar o caso da contagem zerada ai em cima, e isso que pega quem
+        // acabou de por uma musica com o jogo aberto.) Nao precisa conferir o
+        // relogio guardado: ele so existe depois de uma varredura, que grava
+        // os dois juntos - e se algum outro script escrever por cima dele, o
+        // pior que sai daqui e uma varredura a mais.
+        GET_CLEO_SHARED_VAR CFG_VAR_TRACKT dt
+        GET_GAME_TIMER tmpInt
+        tmpInt = tmpInt - dt
+        IF tmpInt > CFG_TRACK_SCAN_MS
+            GOSUB bbg_scan_tracks
+        ENDIF
     ENDIF
-    lastTrack = tmpInt
+    GET_CLEO_SHARED_VAR CFG_VAR_TRACKN tmpInt
+    IF tmpInt < 1
+        lastTrack = 0                           // nenhuma musica na pasta
+        RETURN
+    ENDIF
+    // Sorteia uma posicao da lista. O 0209 sorteia de 'min' ate 'max'-1, que
+    // aqui e exatamente o que queremos: 0 .. contagem-1. (O IF e so a mesma
+    // trava de sempre contra o sorteio devolver o 'max'.)
+    GENERATE_RANDOM_INT_IN_RANGE 0 tmpInt dt
+    IF dt >= tmpInt
+        dt = 0
+    ENDIF
+    // Le o numero da faixa guardado nessa posicao
+    tries = dt * 4
+    tries = tries + bufPath
+    tries = tries + CFG_MEM_TRACKS
+    READ_MEMORY tries 4 0 tries
+    // Caiu na faixa que acabou de tocar? Passa para a seguinte da lista (no
+    // fim, volta ao comeco). Com uma musica so na pasta, repete ela mesma.
+    IF tries = lastTrack
+    AND tmpInt > 1
+        dt = dt + 1
+        IF dt >= tmpInt
+            dt = 0
+        ENDIF
+        tries = dt * 4
+        tries = tries + bufPath
+        tries = tries + CFG_MEM_TRACKS
+        READ_MEMORY tries 4 0 tries
+    ENDIF
+    lastTrack = tries
     RETURN
 
     // =======================================================================
@@ -1473,6 +1557,10 @@ bbg_play_track:
     GOSUB bbg_build_path
     LOAD_3D_AUDIO_STREAM $bufPath boxStream
     IF boxStream = 0
+        // Nao abriu (o jogador apagou o arquivo, ou ele esta corrompido):
+        // a lista ficou velha. Zerar a contagem faz a proxima tentativa
+        // (CFG_AUDIO_RETRY_MS) varrer a pasta de novo.
+        SET_CLEO_SHARED_VAR CFG_VAR_TRACKN 0
         RETURN
     ENDIF
     // volume: vem do ini (se a chave nao existir, fica o padrao CFG_VOLUME)

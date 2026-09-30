@@ -1,3 +1,6 @@
 # saida do compilador, so para conferir o bytecode a mao
 #   gta3sc ... -emit-ir2 BoomboxGuy.sc   ->   BoomboxGuy.ir2
 *.ir2
+
+# python (tools/ir2_sim.py)
+__pycache__/

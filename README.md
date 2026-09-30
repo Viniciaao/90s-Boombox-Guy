@@ -7,7 +7,7 @@
 <img alt="GTA San Andreas 1.0 US" src="https://img.shields.io/badge/GTA_San_Andreas-1.0_US-2f2f2f?style=for-the-badge">
 <img alt="Requer CLEO 4 + CLEO+ v1.2+" src="https://img.shields.io/badge/requer-CLEO_4_%2B_CLEO%2B_v1.2+-blue?style=for-the-badge">
 <img alt="Feito com gta3script" src="https://img.shields.io/badge/feito_com-gta3script-orange?style=for-the-badge">
-<img alt="Versão v6.6" src="https://img.shields.io/badge/vers%C3%A3o-v6.6-success?style=for-the-badge">
+<img alt="Versão v6.7" src="https://img.shields.io/badge/vers%C3%A3o-v6.7-success?style=for-the-badge">
 
 **Um NPC "cara do som" aparece longe de você, vem correndo com a caixa de som<br>
 e passa a te acompanhar com música em áudio 3D — na rua, no interior<br>
@@ -122,7 +122,7 @@ GTA San Andreas/
       som1.mp3
       som2.mp3
       ...
-      som50.mp3
+      som999.mp3
       radio.dff              <- (opcional) caixa por arquivo, sem ID
       radio.txd              <- (opcional) idem
 ```
@@ -154,14 +154,16 @@ script já exige na checagem de dependência.
 
 ## 🎵 Músicas
 
-Nome dos arquivos: `som1.mp3`, `som2.mp3` … `som50.mp3` (não precisa ser MP3:
+Nome dos arquivos: `som1.mp3`, `som2.mp3` … `som999.mp3` (não precisa ser MP3:
 valem OGG, WAV e AIFF também — o que o BASS do CLEO abrir).
 
-- **Quantidade: de 1 até 50.** O script **varre a pasta e conta quais
-  arquivos existem** na primeira vez que você chama o NPC e usa só os que
-  estão lá — funciona com 1, 2, 10 ou 50 músicas, e até com numeração
-  "esburacada" (por exemplo só `som1`, `som4` e `som9`). Arquivos que
-  faltarem são simplesmente ignorados.
+- **Quantidade: de 1 até 999.** O script **varre a pasta e guarda o número de
+  cada arquivo que existe** e usa só o que está lá — funciona com 1, 2, 10 ou
+  999 músicas, e até com numeração "esburacada" (por exemplo só `som1`,
+  `som4` e `som9`). Arquivos que faltarem são simplesmente ignorados. O teto
+  é a constante `CFG_MAX_TRACKS` (`999`); para mais que isso, mude ela e
+  recompile (custa 4 bytes de memória por faixa e um teste de arquivo por
+  número na varredura).
 - **A ordem é sempre aleatória**, nunca sequencial, e ele **não repete a
   mesma faixa duas vezes seguidas**. Quando a música acaba, ele sorteia
   outra sozinho.
@@ -193,13 +195,15 @@ com `./build.sh` (ou `make`).
 | `CFG_TUNE_KEY` | `46` (Delete) | Tecla que grava o ajuste da caixa em arquivo |
 | `CFG_SND_OFF_X/Y/Z` | `0.25 / 0.10 / 0.75` | Onde o som 3D nasce em relação ao corpo |
 | `CFG_VOLUME` | `1.0` | Volume padrão da música (**o `.ini` pode mudar**) |
-| `CFG_MAX_TRACKS` | `50` | Número máximo de faixas que o script procura (`som1..som50`) |
+| `CFG_MAX_TRACKS` | `999` | **Teto** de faixas que o script procura (`som1..som999`) — não é uma lista obrigatória: quem tem 3 músicas usa 3 |
+| `CFG_TRACK_SCAN_MS` | `10000` | Intervalo mínimo entre duas varreduras da pasta de músicas (a lista é refeita depois disso) |
 | `CFG_PATH_SIZE` | `128` | Tamanho do buffer de linha do `.ini` / caminho do MP3 (cabe uma lista de uns 15 peds) |
 | `CFG_PED_MAX` | `16` | Quantos peds cabem na lista `[Ped] model=a,b,c` |
 | `CFG_NAME_MAX` | `40` | Maior nome de arquivo (sem extensão) aceito na caixa por arquivo |
-| `CFG_MEM_*` | — | Mapa do bloco de memória único do script (linha do `.ini`, ids dos peds, nomes do DFF/TXD, caminhos) — fica em `bufPath` |
+| `CFG_MEM_*` | — | Mapa do bloco de memória único do script (linha do `.ini`, ids dos peds, nomes do DFF/TXD, caminhos e a **lista das faixas que existem**, 4 bytes por uma) — fica em `bufPath` |
 | `CFG_VAR_SECT` / `_PEDN` / `_LASTPED` | `1017` / `1016` / `1015` | Vars do CLEO: seção do `.ini` que está sendo lida, nº de peds na lista e último ped sorteado |
 | `CFG_VAR_SPECIAL` / `_CACHE_H` / `_CACHE_K` | `1014` / `1013` / `1012` | Vars do CLEO: handle do modelo especial em uso, e o cache (handle + hash dos nomes) do último carregado |
+| `CFG_VAR_TRACKN` / `_TRACKT` | `1011` / `1010` | Vars do CLEO: quantas músicas a última varredura achou e quando ela aconteceu |
 | `CFG_CLEOPLUS_MIN` | `16908288` (`0x01020000` = v1.2.0.0) | Versão mínima do CLEO+ aceita |
 | `CFG_SPAWN_BACK` / `CFG_SPAWN_SIDE` | `-45.0` | Distâncias de spawn (negativo em Y = atrás do player) |
 | `CFG_SPAWN_MID` / `CFG_SPAWN_NEAR` | `-30.0` / `-15.0` | Spawn mais perto, se os pontos acima não tiverem chão |
@@ -417,6 +421,24 @@ gta3sc --config=gtasa --guesser --cs -fcleo -fno-entity-tracking \
   `config/gtasa/commandline.txt` do gta3sc, por isso as `CONST_*` funcionam
   sem flag extra.
 
+### Testando sem abrir o jogo
+
+O sorteio de faixas dá para conferir fora do jogo: o `tools/ir2_sim.py`
+**executa o IR2 que o compilador emite** (não é uma reimplementação em
+Python) com a pasta de músicas, a memória, o relógio e o sorteio imitados.
+
+```bash
+gta3sc --config=gtasa --guesser --cs -fcleo -fno-entity-tracking \
+       --add-config=tools/cleo-plus.xml -emit-ir2 -o /tmp/bbg.ir2 BoomboxGuy.sc
+python3 tools/ir2_sim.py /tmp/bbg.ir2
+```
+
+Ele chama `bbg_scan_tracks` e `bbg_pick_track` do próprio bytecode e confere:
+quantas faixas a varredura achou, se o sorteio é uniforme, se nunca repete a
+faixa anterior, o que acontece com 1 faixa / numeração esburacada / pasta
+vazia / 999 faixas, quando a pasta é revarrida e se nada lê ou escreve fora
+do bloco de memória.
+
 ---
 
 ## ❓ Problemas comuns
@@ -445,6 +467,7 @@ BoomboxGuy.sc            fonte (gta3script) — é aqui que você mexe
 BoomboxGuy.cs            compilado (vai para CLEO/)
 build.sh / Makefile      builds
 tools/cleo-plus.xml      opcodes do CLEO+ para o gta3sc (MIT, Junior_Djjr)
+tools/ir2_sim.py         teste do sorteio de faixas sem abrir o jogo (Python 3)
 BoomboxGuy/BoomboxGuy.ini  cópia de exemplo do arquivo de configuração
 BoomboxGuy/LEIA-ME.txt     instruções que vão junto com o mod (em texto puro)
 README.md                este arquivo
@@ -604,6 +627,15 @@ bagunçadas):
   tem referência própria do CLEO+ (o modelo especial é contado), então não há
   ponteiro solto nem `REMOVE_SPECIAL_MODEL` em cima de render object vivo; e
   se a criação falhar, a caixa do jogo assume na mesma chamada.
+- **Lista de músicas**: o mesmo bloco de memória guarda o número de cada
+  `som<N>.mp3` que existe (4 bytes por faixa, `CFG_MEM_TRACKS`), e a contagem
+  fica numa var do CLEO (`1011`) com o relógio da varredura (`1010`) — as duas
+  são zeradas na inicialização, porque o bloco é outro a cada reinício do
+  script e uma contagem antiga apontaria para memória nova. O sorteio lê uma
+  posição dessa lista: nenhum teste de arquivo na hora de tocar, e nenhuma
+  faixa fica de fora por azar do sorteio. A pasta é revarrida na primeira
+  música, quando um arquivo não abre (o `bbg_play_track` zera a contagem) e
+  depois de `CFG_TRACK_SCAN_MS`.
 - O loop principal tem `WAIT 0`, e o script volta ao estado inicial se o
   player morrer, se o char sumir do pool, se o NPC morrer ou se for
   dispensado.
@@ -615,6 +647,26 @@ bagunçadas):
 
 ## 📜 Histórico de versões
 
+- **v6.7** — até 999 músicas:
+  - **Teto de 50 → 999 faixas** (`CFG_MAX_TRACKS`): `som1.mp3` … `som999.mp3`.
+    Continua valendo qualquer quantidade entre 1 e o teto, com numeração
+    esburacada ou não.
+  - **Sorteio por lista, não por teste de arquivo.** O script varre a pasta
+    uma vez e guarda o número de cada faixa que existe no seu bloco de
+    memória (4 bytes por faixa); na hora de tocar ele sorteia uma posição
+    dessa lista. Era o que faltava para o teto subir: sortear um número de
+    1..999 e testar se o arquivo existe quase nunca cai numa música de quem
+    tem poucas faixas, e o plano B (a primeira que existir) acabava tocando
+    sempre a mesma. Agora o sorteio é uniforme e a troca de faixa não testa
+    arquivo nenhum.
+  - A pasta é **revarrida** na primeira música, quando uma faixa some (o
+    arquivo não abre) e a cada `CFG_TRACK_SCAN_MS` (10 s) — colocar/tirar
+    músicas com o jogo aberto continua valendo, e o soco de "próxima faixa"
+    não paga uma varredura inteira.
+  - Novas vars do CLEO: `1011` (quantas faixas a varredura achou) e `1010`
+    (quando ela aconteceu). As duas são zeradas na inicialização, porque a
+    lista em si mora no bloco de memória, que é outro a cada reinício do
+    script.
 - **v6.6** — variações de NPC e caixa sem ID:
   - **Lista de peds**: `[Ped] model=wmybu,male01,fam1,bfori` — a cada
     `BOOBOX` o script sorteia uma das skins (sem repetir a anterior). Itens
